@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useReversiEngine, type GameMode, type ReversiEngine } from './useReversiEngine';
 import ReversiBoard from './ReversiBoard';
 
-function Lobby({ onStart }: { onStart: (mode: GameMode, difficulty: number) => void }) {
+function Lobby({ onStart }: { onStart: (mode: GameMode, difficulty: number, boardSize?: number) => void }) {
   const [mode, setMode] = useState<GameMode>('ai');
   const [difficulty, setDifficulty] = useState(5);
+  const [boardSize, setBoardSize] = useState(8);
 
   return (
     <div className="lobby">
@@ -45,7 +46,22 @@ function Lobby({ onStart }: { onStart: (mode: GameMode, difficulty: number) => v
           </div>
         )}
 
-        <button className="start-btn" onClick={() => onStart(mode, difficulty)}>
+        <div className="lobby-section">
+          <label className="lobby-label">Board Size</label>
+          <div className="lobby-buttons">
+            {[8, 10, 12, 16].map(s => (
+              <button
+                key={s}
+                className={`lobby-btn ${boardSize === s ? 'active' : ''}`}
+                onClick={() => setBoardSize(s)}
+              >
+                {s}×{s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button className="start-btn" onClick={() => onStart(mode, difficulty, boardSize)}>
           Start Game
         </button>
       </div>
@@ -54,7 +70,7 @@ function Lobby({ onStart }: { onStart: (mode: GameMode, difficulty: number) => v
 }
 
 function GameView({ engine }: { engine: ReversiEngine }) {
-  const { state, phase, mode, difficulty, thinking, playMove, newGame } = engine;
+  const { state, phase, mode, difficulty, boardSize, thinking, canUndo, knightMode, knightAvailable, playMove, undo, toggleKnight, newGame } = engine;
   const isPlayerTurn = mode === 'pvp' || state.turn === 1;
 
   return (
@@ -89,6 +105,8 @@ function GameView({ engine }: { engine: ReversiEngine }) {
         lastMove={state.lastMove}
         flippedDiscs={state.flippedDiscs}
         turn={state.turn}
+        boardSize={boardSize}
+        knightMode={knightMode && isPlayerTurn && !thinking}
         disabled={!isPlayerTurn || thinking || phase === 'gameover'}
         onCellClick={playMove}
       />
@@ -97,6 +115,20 @@ function GameView({ engine }: { engine: ReversiEngine }) {
         {mode === 'ai' && (
           <span className="difficulty-label">Difficulty: {difficulty}</span>
         )}
+        <button
+          className="undo-btn"
+          onClick={undo}
+          disabled={!canUndo || thinking}
+        >
+          Undo
+        </button>
+        <button
+          className={`knight-btn ${knightMode ? 'active' : ''}`}
+          onClick={toggleKnight}
+          disabled={!knightAvailable || thinking || phase === 'gameover'}
+        >
+          ♞ Knight
+        </button>
         <button className="new-game-btn" onClick={newGame}>
           New Game
         </button>

@@ -7,11 +7,12 @@ interface ReversiBoardProps {
   lastMove: number | null;
   flippedDiscs: number[];
   turn: 1 | 2;
+  boardSize: number;
+  knightMode: boolean;
   disabled: boolean;
   onCellClick: (pos: number) => void;
 }
 
-const BOARD_CELLS = 8;
 const PADDING = 2;
 
 // Colors (hardcoded — CSS vars don't work in canvas)
@@ -19,6 +20,7 @@ const BOARD_BG = '#2d8a4e';
 const GRID_LINES = '#1a6b35';
 const BOARD_BORDER = '#1a4830';
 const VALID_MOVE_DOT = 'rgba(255, 255, 255, 0.25)';
+const KNIGHT_MOVE_DOT = 'rgba(124, 106, 247, 0.45)';
 const LAST_MOVE_HIGHLIGHT = 'rgba(255, 200, 0, 0.4)';
 const DISC_SHADOW = 'rgba(0,0,0,0.3)';
 
@@ -31,7 +33,7 @@ interface AnimState {
 }
 
 export default function ReversiBoard({
-  board, legalMoves, lastMove, flippedDiscs, turn: _turn, disabled, onCellClick
+  board, legalMoves, lastMove, flippedDiscs, turn: _turn, boardSize, knightMode, disabled, onCellClick
 }: ReversiBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<AnimState>({
@@ -45,16 +47,18 @@ export default function ReversiBoard({
   const boardRef = useRef(board);
   const legalRef = useRef(legalMoves);
   const lastMoveRef = useRef(lastMove);
+  const knightModeRef = useRef(knightMode);
   boardRef.current = board;
   legalRef.current = legalMoves;
   lastMoveRef.current = lastMove;
+  knightModeRef.current = knightMode;
 
   const getCellSize = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return 60;
     const displaySize = parseInt(canvas.style.width) || 560;
-    return (displaySize - PADDING * 2) / BOARD_CELLS;
-  }, []);
+    return (displaySize - PADDING * 2) / boardSize;
+  }, [boardSize]);
 
   const drawBoard = useCallback(() => {
     const canvas = canvasRef.current;
@@ -73,10 +77,11 @@ export default function ReversiBoard({
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const cellSize = (displaySize - PADDING * 2) / BOARD_CELLS;
+    const cellSize = (displaySize - PADDING * 2) / boardSize;
     const b = boardRef.current;
     const legal = legalRef.current;
     const anim = animRef.current;
+    const cells = boardSize * boardSize;
 
     // Board background
     ctx.fillStyle = BOARD_BORDER;
@@ -87,7 +92,7 @@ export default function ReversiBoard({
     // Grid lines
     ctx.strokeStyle = GRID_LINES;
     ctx.lineWidth = 1;
-    for (let i = 0; i <= BOARD_CELLS; i++) {
+    for (let i = 0; i <= boardSize; i++) {
       const p = PADDING + i * cellSize;
       ctx.beginPath();
       ctx.moveTo(p, PADDING);
@@ -101,19 +106,19 @@ export default function ReversiBoard({
 
     // Last move highlight
     if (lastMoveRef.current !== null) {
-      const row = Math.floor(lastMoveRef.current / 8);
-      const col = lastMoveRef.current % 8;
+      const row = Math.floor(lastMoveRef.current / boardSize);
+      const col = lastMoveRef.current % boardSize;
       ctx.fillStyle = LAST_MOVE_HIGHLIGHT;
       ctx.fillRect(PADDING + col * cellSize, PADDING + row * cellSize, cellSize, cellSize);
     }
 
     // Draw discs
-    for (let i = 0; i < 64; i++) {
+    for (let i = 0; i < cells; i++) {
       const cellColor = b[i];
       if (cellColor === 0) continue;
 
-      const row = Math.floor(i / 8);
-      const col = i % 8;
+      const row = Math.floor(i / boardSize);
+      const col = i % boardSize;
       const cx = PADDING + col * cellSize + cellSize / 2;
       const cy = PADDING + row * cellSize + cellSize / 2;
       const radius = cellSize * 0.38;
@@ -169,18 +174,33 @@ export default function ReversiBoard({
       ctx.restore();
     }
 
-    // Valid move dots
-    for (const pos of legal) {
-      const row = Math.floor(pos / 8);
-      const col = pos % 8;
-      const cx = PADDING + col * cellSize + cellSize / 2;
-      const cy = PADDING + row * cellSize + cellSize / 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, cellSize * 0.12, 0, Math.PI * 2);
-      ctx.fillStyle = VALID_MOVE_DOT;
-      ctx.fill();
+    // Valid move dots or knight mode indicators
+    if (knightModeRef.current) {
+      // In knight mode: show purple dots on all empty cells
+      for (let i = 0; i < cells; i++) {
+        if (b[i] !== 0) continue;
+        const row = Math.floor(i / boardSize);
+        const col = i % boardSize;
+        const cx = PADDING + col * cellSize + cellSize / 2;
+        const cy = PADDING + row * cellSize + cellSize / 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, cellSize * 0.12, 0, Math.PI * 2);
+        ctx.fillStyle = KNIGHT_MOVE_DOT;
+        ctx.fill();
+      }
+    } else {
+      for (const pos of legal) {
+        const row = Math.floor(pos / boardSize);
+        const col = pos % boardSize;
+        const cx = PADDING + col * cellSize + cellSize / 2;
+        const cy = PADDING + row * cellSize + cellSize / 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, cellSize * 0.12, 0, Math.PI * 2);
+        ctx.fillStyle = VALID_MOVE_DOT;
+        ctx.fill();
+      }
     }
-  }, []);
+  }, [boardSize]);
 
   // Start animations when flippedDiscs or lastMove change
   useEffect(() => {
@@ -252,10 +272,10 @@ export default function ReversiBoard({
     };
   }, [board, flippedDiscs, lastMove, drawBoard]);
 
-  // Redraw on legal moves change (no animation)
+  // Redraw on legal moves or knight mode change (no animation)
   useEffect(() => {
     if (!animRef.current.running) drawBoard();
-  }, [legalMoves, drawBoard]);
+  }, [legalMoves, knightMode, drawBoard]);
 
   // Handle resize
   useEffect(() => {
@@ -274,10 +294,13 @@ export default function ReversiBoard({
     const cellSize = getCellSize();
     const col = Math.floor(x / cellSize);
     const row = Math.floor(y / cellSize);
-    if (row < 0 || row >= 8 || col < 0 || col >= 8) return;
-    const pos = row * 8 + col;
-    if (legalMoves.includes(pos)) {
-      onCellClick(pos);
+    if (row < 0 || row >= boardSize || col < 0 || col >= boardSize) return;
+    const pos = row * boardSize + col;
+    if (knightModeRef.current) {
+      // In knight mode, any empty cell is valid
+      if (boardRef.current[pos] === 0) onCellClick(pos);
+    } else {
+      if (legalMoves.includes(pos)) onCellClick(pos);
     }
   }, [disabled, legalMoves, onCellClick, getCellSize]);
 

@@ -217,3 +217,44 @@ button:focus-visible {
 .new-game-btn:hover {
   background: rgba(255, 255, 255, 0.15);
 }
+
+.undo-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+.undo-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.undo-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.knight-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+.knight-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.knight-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
+.knight-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}

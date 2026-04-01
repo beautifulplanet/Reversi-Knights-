@@ -23,10 +23,16 @@ export interface ReversiEngine {
   phase: GamePhase;
   mode: GameMode;
   difficulty: number;
+  boardSize: number;
   thinking: boolean;
   ready: boolean;
-  startGame: (mode: GameMode, difficulty: number) => void;
+  canUndo: boolean;
+  knightMode: boolean;
+  knightAvailable: boolean;
+  startGame: (mode: GameMode, difficulty: number, boardSize?: number) => void;
   playMove: (pos: number) => void;
+  undo: () => void;
+  toggleKnight: () => void;
   newGame: () => void;
 }
 
@@ -53,18 +59,25 @@ export function useReversiEngine(): ReversiEngine {
   const [phase, setPhase] = useState<GamePhase>('lobby');
   const [mode, setMode] = useState<GameMode>('ai');
   const [difficulty, setDifficulty] = useState(5);
+  const [boardSize, setBoardSize] = useState(8);
+
+  const [canUndo, setCanUndo] = useState(false);
+  const [knightMode, setKnightMode] = useState(false);
 
   // Refs to prevent stale closures
   const modeRef = useRef(mode);
   const difficultyRef = useRef(difficulty);
   const phaseRef = useRef(phase);
   const aiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const knightModeRef = useRef(false);
 
-  // Derived thinking flag — cannot get stuck
+  // Derived flags
   const thinking = phase === 'playing' && mode === 'ai' && state.turn === 2 && !state.isGameOver;
+  const knightAvailable = phase === 'playing' && gameRef.current.knight_available();
 
   const doAiMove = useCallback(() => {
     const g = gameRef.current;
+    const cells = g.size * g.size;
     if (!g || g.is_game_over() || g.current_turn() !== 2) return;
     if (phaseRef.current !== 'playing' || modeRef.current !== 'ai') return;
 
@@ -75,15 +88,16 @@ export function useReversiEngine(): ReversiEngine {
     const move = g.ai_move(depth);
 
     let flipped: number[] = [];
-    if (move >= 0 && move < 64) {
+    if (move >= 0 && move < cells) {
       const boardAfter = g.get_board();
-      for (let i = 0; i < 64; i++) {
+      for (let i = 0; i < cells; i++) {
         if (i !== move && boardBefore[i] !== boardAfter[i]) flipped.push(i);
       }
     }
 
     const s = readGameState(g, move >= 0 ? move : null, flipped);
     setState(s);
+    setCanUndo(g.can_undo());
 
     if (s.isGameOver) { setPhase('gameover'); phaseRef.current = 'gameover'; return; }
 
@@ -98,12 +112,25 @@ export function useReversiEngine(): ReversiEngine {
     if (!g || g.is_game_over()) return;
     if (modeRef.current === 'ai' && g.current_turn() !== 1) return;
 
-    const flips = g.get_flips(pos);
-    const ok = g.make_move(pos);
+    let ok: boolean;
+    let flips: number[];
+
+    if (knightModeRef.current) {
+      flips = g.get_knight_flips(pos);
+      ok = g.make_knight_move(pos);
+      if (ok) {
+        setKnightMode(false);
+        knightModeRef.current = false;
+      }
+    } else {
+      flips = g.get_flips(pos);
+      ok = g.make_move(pos);
+    }
     if (!ok) return;
 
     const s = readGameState(g, pos, flips);
     setState(s);
+    setCanUndo(g.can_undo());
 
     if (s.isGameOver) { setPhase('gameover'); phaseRef.current = 'gameover'; return; }
 
@@ -113,24 +140,58 @@ export function useReversiEngine(): ReversiEngine {
     }
   }, [doAiMove]);
 
-  const startGame = useCallback((newMode: GameMode, newDifficulty: number) => {
+  const startGame = useCallback((newMode: GameMode, newDifficulty: number, newSize: number = 8) => {
     if (aiTimerRef.current) { clearTimeout(aiTimerRef.current); aiTimerRef.current = null; }
-    gameRef.current.reset();
+    gameRef.current = new Game(newSize);
     setMode(newMode);
     setDifficulty(newDifficulty);
+    setBoardSize(newSize);
     modeRef.current = newMode;
     difficultyRef.current = newDifficulty;
     setPhase('playing');
     phaseRef.current = 'playing';
     setState(readGameState(gameRef.current, null, []));
+    setCanUndo(false);
+    setKnightMode(false);
+    knightModeRef.current = false;
   }, []);
 
   const newGame = useCallback(() => {
     if (aiTimerRef.current) { clearTimeout(aiTimerRef.current); aiTimerRef.current = null; }
-    gameRef.current.reset();
+    gameRef.current = new Game();
+    setBoardSize(8);
     setState(readGameState(gameRef.current, null, []));
+    setCanUndo(false);
+    setKnightMode(false);
+    knightModeRef.current = false;
     setPhase('lobby');
     phaseRef.current = 'lobby';
+  }, []);
+
+  const undo = useCallback(() => {
+    const g = gameRef.current;
+    if (aiTimerRef.current) { clearTimeout(aiTimerRef.current); aiTimerRef.current = null; }
+    // In AI mode, undo twice (undo AI move + undo player move) to get back to player's turn
+    if (modeRef.current === 'ai' && g.can_undo()) {
+      g.undo(); // undo AI move
+      if (g.can_undo()) g.undo(); // undo player move
+    } else {
+      g.undo();
+    }
+    setState(readGameState(g, null, []));
+    setCanUndo(g.can_undo());
+    if (g.is_game_over()) {
+      setPhase('gameover'); phaseRef.current = 'gameover';
+    } else {
+      setPhase('playing'); phaseRef.current = 'playing';
+    }
+  }, []);
+
+  const toggleKnight = useCallback(() => {
+    setKnightMode(prev => {
+      knightModeRef.current = !prev;
+      return !prev;
+    });
   }, []);
 
   return {
@@ -138,10 +199,16 @@ export function useReversiEngine(): ReversiEngine {
     phase,
     mode,
     difficulty,
+    boardSize,
     thinking,
     ready: true,
+    canUndo,
+    knightMode,
+    knightAvailable,
     startGame,
     playMove,
+    undo,
+    toggleKnight,
     newGame,
   };
 }
