@@ -342,15 +342,30 @@ function bestMove(board: number[], color: number, depthLimit: number, sd: SizeDa
   return best;
 }
 
-// ── Knight functions ──
+// ── Knight helpers ──
+// Cell values: 0=empty, 1=black disc, 2=white disc, 3=black knight, 4=white knight
 
-function getKnightFlips(board: number[], pos: number, color: number, size: number): number[] {
-  const flips: number[] = [];
-  if (board[pos] !== 0) return flips;
-  const opp = 3 - color;
-  const r0 = Math.floor(pos / size), c0 = pos % size;
+function knightCellValue(player: number): number { return player + 2; }
+
+function getKnightDestinations(fromPos: number, size: number, board: number[]): number[] {
+  const dests: number[] = [];
+  const r0 = Math.floor(fromPos / size), c0 = fromPos % size;
   for (let k = 0; k < 8; k++) {
     const r = r0 + KNIGHT_DR[k], c = c0 + KNIGHT_DC[k];
+    if (r >= 0 && r < size && c >= 0 && c < size) {
+      const idx = r * size + c;
+      if (board[idx] === 0) dests.push(idx);
+    }
+  }
+  return dests;
+}
+
+function getKnightLandingFlips(board: number[], pos: number, color: number, size: number): number[] {
+  const flips: number[] = [];
+  const opp = 3 - color;
+  const r0 = Math.floor(pos / size), c0 = pos % size;
+  for (let d = 0; d < 8; d++) {
+    const r = r0 + DR[d], c = c0 + DC[d];
     if (r >= 0 && r < size && c >= 0 && c < size) {
       const idx = r * size + c;
       if (board[idx] === opp) flips.push(idx);
@@ -359,12 +374,12 @@ function getKnightFlips(board: number[], pos: number, color: number, size: numbe
   return flips;
 }
 
-function applyKnightInPlace(board: number[], pos: number, color: number, size: number): void {
-  board[pos] = color;
+function applyKnightLanding(board: number[], pos: number, color: number, size: number): void {
+  board[pos] = knightCellValue(color);
   const opp = 3 - color;
   const r0 = Math.floor(pos / size), c0 = pos % size;
-  for (let k = 0; k < 8; k++) {
-    const r = r0 + KNIGHT_DR[k], c = c0 + KNIGHT_DC[k];
+  for (let d = 0; d < 8; d++) {
+    const r = r0 + DR[d], c = c0 + DC[d];
     if (r >= 0 && r < size && c >= 0 && c < size) {
       const idx = r * size + c;
       if (board[idx] === opp) board[idx] = color;
@@ -372,15 +387,49 @@ function applyKnightInPlace(board: number[], pos: number, color: number, size: n
   }
 }
 
+const ORTH_DR = [-1, 0, 1, 0];
+const ORTH_DC = [0, 1, 0, -1];
+
+function isKnightCaptured(board: number[], kPos: number, size: number): boolean {
+  if (kPos < 0) return false;
+  const kVal = board[kPos];
+  if (kVal !== 3 && kVal !== 4) return false;
+  const owner = kVal - 2;
+  const opp = 3 - owner;
+  const r0 = Math.floor(kPos / size), c0 = kPos % size;
+  for (let d = 0; d < 4; d++) {
+    const r = r0 + ORTH_DR[d], c = c0 + ORTH_DC[d];
+    if (r < 0 || r >= size || c < 0 || c >= size) return false;
+    if (board[r * size + c] !== opp) return false;
+  }
+  return true;
+}
+
 // ── Game Class ──
+// Two-phase turns: each turn has a DISC phase then a KNIGHT phase.
+// Both players have a persistent knight that starts at a corner and
+// moves every turn in an L-shape (chess knight). Landing flips all
+// adjacent opponent discs.
+
+export type TurnPhase = 'disc' | 'knight';
+
+interface HistoryEntry {
+  board: number[];
+  turn: number;
+  over: boolean;
+  turnPhase: TurnPhase;
+  knightPos: [number, number];
+}
 
 export class Game {
   private board: number[];
   private turn: number;   // 1 = Black, 2 = White
   private over: boolean;
   private sd: SizeData;
-  private history: { board: number[]; turn: number; over: boolean; knightUsed: [boolean, boolean] }[];
-  private knightUsed: [boolean, boolean]; // [black, white]
+  private history: HistoryEntry[];
+  private _turnPhase: TurnPhase;
+  // Knight positions: >=0 = cell index, -2 = captured
+  private knightPos: [number, number];
   readonly size: number;
 
   constructor(size: number = 8) {
@@ -391,7 +440,13 @@ export class Game {
     this.turn = 1;
     this.over = false;
     this.history = [];
-    this.knightUsed = [false, false];
+    this._turnPhase = 'disc';
+
+    // Place knights at opposite corners
+    const cells = size * size;
+    this.knightPos = [0, cells - 1];
+    this.board[0] = 3;            // black knight top-left
+    this.board[cells - 1] = 4;    // white knight bottom-right
   }
 
   private snapshot(): void {
@@ -399,93 +454,99 @@ export class Game {
       board: this.board.slice(0, this.sd.cells),
       turn: this.turn,
       over: this.over,
-      knightUsed: [this.knightUsed[0], this.knightUsed[1]],
+      turnPhase: this._turnPhase,
+      knightPos: [this.knightPos[0], this.knightPos[1]],
     });
   }
 
-  get_board(): number[]     { return this.board.slice(0, this.sd.cells); }
-  get_legal_moves(): number[] { return getLegalMoves(this.board, this.turn, this.size); }
-  current_turn(): number    { return this.turn; }
-  is_game_over(): boolean   { return this.over; }
-  black_count(): number     { return countDiscs(this.board, 1, this.sd.cells); }
-  white_count(): number     { return countDiscs(this.board, 2, this.sd.cells); }
+  // ── Public getters ──
 
-  make_move(pos: number): boolean {
-    if (this.over || pos < 0 || pos >= this.sd.cells) return false;
-    if (!hasFlips(this.board, pos, this.turn, this.size)) return false;
-    this.snapshot();
-    applyMoveInPlace(this.board, pos, this.turn, this.size);
-    this.advanceTurn();
-    return true;
+  get_board(): number[]       { return this.board.slice(0, this.sd.cells); }
+  current_turn(): number      { return this.turn; }
+  is_game_over(): boolean     { return this.over; }
+  turn_phase(): TurnPhase     { return this._turnPhase; }
+  black_count(): number       { return countDiscs(this.board, 1, this.sd.cells); }
+  white_count(): number       { return countDiscs(this.board, 2, this.sd.cells); }
+
+  get_knight_pos(player?: number): number {
+    const p = player ?? this.turn;
+    return this.knightPos[p - 1];
+  }
+
+  // Phase-aware legal moves:
+  //   disc phase  → valid disc placements
+  //   knight phase → valid L-shape destinations
+  get_legal_moves(): number[] {
+    if (this._turnPhase === 'knight') {
+      return this.getKnightTargets();
+    }
+    return getLegalMoves(this.board, this.turn, this.size);
   }
 
   get_flips(pos: number): number[] {
     return getFlips(this.board, pos, this.turn, this.size);
   }
 
+  get_knight_landing_flips(pos: number): number[] {
+    return getKnightLandingFlips(this.board, pos, this.turn, this.size);
+  }
+
+  // ── Disc move (disc phase only) ──
+
+  make_move(pos: number): boolean {
+    if (this.over || this._turnPhase !== 'disc') return false;
+    if (pos < 0 || pos >= this.sd.cells) return false;
+    if (!hasFlips(this.board, pos, this.turn, this.size)) return false;
+    this.snapshot();
+    applyMoveInPlace(this.board, pos, this.turn, this.size);
+    this.enterKnightPhase();
+    return true;
+  }
+
+  // ── Knight move (knight phase only) ──
+
+  make_knight_move(pos: number): boolean {
+    if (this.over || this._turnPhase !== 'knight') return false;
+    const targets = this.getKnightTargets();
+    if (!targets.includes(pos)) return false;
+    this.snapshot();
+    this.moveKnight(pos);
+    this._turnPhase = 'disc';
+    this.advanceTurn();
+    return true;
+  }
+
+  // ── AI ──
+
   ai_move(depth: number): number {
     if (this.over) return -1;
     depth = Math.min(6, Math.max(1, depth));
 
-    // Normal move search
-    const pos = bestMove(this.board, this.turn, depth, this.sd);
-
-    // Consider knight if available
-    let knightPos = -1;
-    let knightScore = -999999;
-    if (!this.knightUsed[this.turn - 1]) {
-      const cells = this.sd.cells;
-      for (let i = 0; i < cells; i++) {
-        if (this.board[i] !== 0) continue;
-        const flips = getKnightFlips(this.board, i, this.turn, this.size);
-        if (flips.length >= 3) { // Only consider if flipping 3+ pieces
-          const testBoard = this.board.slice(0, cells);
-          applyKnightInPlace(testBoard, i, this.turn, this.size);
-          const score = evaluate(testBoard, this.turn, this.sd);
-          if (score > knightScore) { knightScore = score; knightPos = i; }
-        }
-      }
-    }
-
-    // Compare knight vs normal move
-    if (knightPos >= 0 && pos >= 0) {
-      const normalBoard = this.board.slice(0, this.sd.cells);
-      applyMoveInPlace(normalBoard, pos, this.turn, this.size);
-      const normalScore = evaluate(normalBoard, this.turn, this.sd);
-      if (knightScore > normalScore + 20) { // Knight must be significantly better
+    if (this._turnPhase === 'disc') {
+      const discMoves = getLegalMoves(this.board, this.turn, this.size);
+      if (discMoves.length === 0) {
+        // No disc moves — skip to knight phase
         this.snapshot();
-        applyKnightInPlace(this.board, knightPos, this.turn, this.size);
-        this.knightUsed[this.turn - 1] = true;
-        this.advanceTurn();
-        return knightPos;
+        this.enterKnightPhase();
+        return -1;
       }
-    } else if (knightPos >= 0 && pos < 0) {
-      // No normal moves but knight available
+      const pos = bestMove(this.board, this.turn, depth, this.sd);
+      if (pos < 0) {
+        this.snapshot();
+        this.enterKnightPhase();
+        return -1;
+      }
       this.snapshot();
-      applyKnightInPlace(this.board, knightPos, this.turn, this.size);
-      this.knightUsed[this.turn - 1] = true;
-      this.advanceTurn();
-      return knightPos;
+      applyMoveInPlace(this.board, pos, this.turn, this.size);
+      this.enterKnightPhase();
+      return pos;
+    } else {
+      // Knight phase — pick best destination by 1-ply evaluation
+      return this.aiBestKnightMove();
     }
-
-    if (pos < 0) {
-      this.snapshot();
-      this.advanceTurn();
-      return -1;
-    }
-    this.snapshot();
-    applyMoveInPlace(this.board, pos, this.turn, this.size);
-    this.advanceTurn();
-    return pos;
   }
 
-  reset(): void {
-    this.board = initialBoard(this.size);
-    this.turn = 1;
-    this.over = false;
-    this.history = [];
-    this.knightUsed = [false, false];
-  }
+  // ── Undo / Reset ──
 
   can_undo(): boolean {
     return this.history.length > 0;
@@ -497,40 +558,128 @@ export class Game {
     this.board = prev.board;
     this.turn = prev.turn;
     this.over = prev.over;
-    this.knightUsed = prev.knightUsed;
+    this._turnPhase = prev.turnPhase;
+    this.knightPos = prev.knightPos;
     return true;
+  }
+
+  reset(): void {
+    const cells = this.size * this.size;
+    this.board = initialBoard(this.size);
+    this.board[0] = 3;
+    this.board[cells - 1] = 4;
+    this.knightPos = [0, cells - 1];
+    this.turn = 1;
+    this.over = false;
+    this._turnPhase = 'disc';
+    this.history = [];
   }
 
   // ── Knight methods ──
 
-  knight_available(player?: number): boolean {
-    const p = player ?? this.turn;
-    return !this.knightUsed[p - 1];
+  knight_can_act(): boolean {
+    const kp = this.knightPos[this.turn - 1];
+    if (kp < 0) return false;
+    return getKnightDestinations(kp, this.size, this.board).length > 0;
   }
 
-  get_knight_flips(pos: number): number[] {
-    return getKnightFlips(this.board, pos, this.turn, this.size);
+  get_knight_targets(): number[] {
+    return this.getKnightTargets();
   }
 
-  make_knight_move(pos: number): boolean {
-    if (this.over || pos < 0 || pos >= this.sd.cells) return false;
-    if (this.board[pos] !== 0) return false;
-    if (this.knightUsed[this.turn - 1]) return false;
+  // ── Knight internals ──
+
+  private getKnightTargets(): number[] {
+    const kp = this.knightPos[this.turn - 1];
+    if (kp < 0) return []; // captured
+    return getKnightDestinations(kp, this.size, this.board);
+  }
+
+  private moveKnight(targetPos: number): void {
+    const p = this.turn;
+    const oldKp = this.knightPos[p - 1];
+    if (oldKp >= 0) this.board[oldKp] = 0; // clear old position
+    applyKnightLanding(this.board, targetPos, p, this.size);
+    this.knightPos[p - 1] = targetPos;
+  }
+
+  private enterKnightPhase(): void {
+    this.checkKnightCaptures();
+    const targets = this.getKnightTargets();
+    if (targets.length > 0) {
+      this._turnPhase = 'knight';
+    } else {
+      // No knight moves available — skip knight phase, end turn
+      this._turnPhase = 'disc';
+      this.advanceTurn();
+    }
+  }
+
+  private aiBestKnightMove(): number {
+    const targets = this.getKnightTargets();
+    if (targets.length === 0) {
+      this._turnPhase = 'disc';
+      this.advanceTurn();
+      return -1;
+    }
+    if (targets.length === 1) {
+      this.snapshot();
+      this.moveKnight(targets[0]);
+      this._turnPhase = 'disc';
+      this.advanceTurn();
+      return targets[0];
+    }
+    // Pick best target by evaluation
+    let bestTarget = targets[0];
+    let bestScore = -999999;
+    for (const t of targets) {
+      const testBoard = this.board.slice(0, this.sd.cells);
+      const oldKp = this.knightPos[this.turn - 1];
+      if (oldKp >= 0) testBoard[oldKp] = 0;
+      applyKnightLanding(testBoard, t, this.turn, this.size);
+      const score = evaluate(testBoard, this.turn, this.sd);
+      if (score > bestScore) { bestScore = score; bestTarget = t; }
+    }
     this.snapshot();
-    applyKnightInPlace(this.board, pos, this.turn, this.size);
-    this.knightUsed[this.turn - 1] = true;
+    this.moveKnight(bestTarget);
+    this._turnPhase = 'disc';
     this.advanceTurn();
-    return true;
+    return bestTarget;
+  }
+
+  private checkKnightCaptures(): void {
+    for (let p = 0; p < 2; p++) {
+      const kp = this.knightPos[p];
+      if (kp >= 0 && isKnightCaptured(this.board, kp, this.size)) {
+        this.board[kp] = 0;
+        this.knightPos[p] = -2;
+      }
+    }
   }
 
   private advanceTurn(): void {
+    this.checkKnightCaptures();
     const next = 3 - this.turn;
-    if (hasMoves(this.board, next, this.size)) {
-      this.turn = next;
-    } else if (hasMoves(this.board, this.turn, this.size)) {
-      // opponent has no moves — current player goes again (pass)
-    } else {
+    const nextHasDisc = hasMoves(this.board, next, this.size);
+    const currHasDisc = hasMoves(this.board, this.turn, this.size);
+
+    // Game ends when neither player has disc moves
+    if (!nextHasDisc && !currHasDisc) {
       this.over = true;
+      return;
+    }
+
+    if (nextHasDisc) {
+      this.turn = next;
+    } else {
+      // Next player has no disc moves — give them knight-only turn if possible
+      const nextKnight = this.knightPos[next - 1];
+      if (nextKnight >= 0 && getKnightDestinations(nextKnight, this.size, this.board).length > 0) {
+        this.turn = next;
+        this._turnPhase = 'knight'; // skip disc phase
+        return;
+      }
+      // Next player can't do anything — current player goes again
     }
   }
 }

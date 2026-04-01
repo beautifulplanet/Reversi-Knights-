@@ -1,4 +1,7 @@
-import { Game } from './src/engine';
+﻿import { Game } from './src/engine';
+
+// Simulates the exact React hook call sequence for 2000 games.
+// Two-phase turns: disc phase -> knight phase per turn.
 
 const SIZES = [8, 10];
 const GAMES_PER_SIZE = 1000;
@@ -16,78 +19,60 @@ for (const size of SIZES) {
 
     while (!game.is_game_over()) {
       calls++;
-      if (calls > 400) {
-        console.error(`Size ${size} Game ${g}: exceeded 400 calls — stuck`);
+      if (calls > 1200) {
+        console.error(`Size ${size} Game ${g}: exceeded 1200 calls`);
         stuckGames++;
         gameStuck = true;
         break;
       }
 
       const turn = game.current_turn();
+      const phase = game.turn_phase();
+      const legal = game.get_legal_moves();
 
       if (turn === 1) {
-        const legal = game.get_legal_moves();
+        // Player turn - act based on phase
         if (legal.length === 0) {
-          console.error(`Size ${size} Game ${g}: turn=1 but no legal moves and not game over`);
-          stuckGames++;
-          gameStuck = true;
-          break;
-        }
-        const pos = legal[Math.floor(Math.random() * legal.length)];
-        const _flips = game.get_flips(pos);
-        const ok = game.make_move(pos);
-        if (!ok) {
-          console.error(`Size ${size} Game ${g}: make_move(${pos}) failed for legal move`);
-          failures++;
-          gameStuck = true;
-          break;
+          // Pass - let AI handle
+          game.ai_move(1);
+          continue;
         }
 
-        if (!game.is_game_over() && game.current_turn() === 2) {
-          let chainCount = 0;
-          while (game.current_turn() === 2 && !game.is_game_over()) {
-            const boardBefore = game.get_board();
-            const move = game.ai_move(2);
-
-            let flipped: number[] = [];
-            if (move >= 0 && move < cells) {
-              const boardAfter = game.get_board();
-              for (let i = 0; i < cells; i++) {
-                if (i !== move && boardBefore[i] !== boardAfter[i]) flipped.push(i);
-              }
-            }
-
-            calls++;
-            if (calls > 400) {
-              console.error(`Size ${size} Game ${g}: exceeded 400 calls in AI chain`);
-              stuckGames++;
-              gameStuck = true;
-              break;
-            }
-
-            if (!game.is_game_over() && game.current_turn() === 2) {
-              chainCount++;
-              passChains++;
-              if (chainCount > 30) {
-                console.error(`Size ${size} Game ${g}: pass-chain exceeded 30`);
-                stuckGames++;
-                gameStuck = true;
-                break;
-              }
-            }
+        if (phase === 'knight') {
+          const ok = game.make_knight_move(legal[Math.floor(Math.random() * legal.length)]);
+          if (!ok) {
+            console.error(`Size ${size} Game ${g}: knight move failed on legal target`);
+            failures++;
+            gameStuck = true;
+            break;
           }
-          if (gameStuck) break;
+        } else {
+          const pos = legal[Math.floor(Math.random() * legal.length)];
+          const _flips = game.get_flips(pos);
+          const ok = game.make_move(pos);
+          if (!ok) {
+            console.error(`Size ${size} Game ${g}: disc move(${pos}) failed for legal move`);
+            failures++;
+            gameStuck = true;
+            break;
+          }
         }
       } else {
-        const boardBefore = game.get_board();
-        const move = game.ai_move(2);
-        let flipped: number[] = [];
-        if (move >= 0 && move < cells) {
-          const boardAfter = game.get_board();
-          for (let i = 0; i < cells; i++) {
-            if (i !== move && boardBefore[i] !== boardAfter[i]) flipped.push(i);
+        // AI turn - chain until turn passes to player or game ends
+        let chainCount = 0;
+        while (game.current_turn() === 2 && !game.is_game_over()) {
+          game.ai_move(2);
+          calls++;
+          chainCount++;
+          if (chainCount > 200) {
+            console.error(`Size ${size} Game ${g}: AI chain exceeded 200`);
+            stuckGames++;
+            gameStuck = true;
+            break;
           }
         }
+        if (chainCount > 1) passChains++;
+        if (gameStuck) break;
       }
     }
 
@@ -105,9 +90,9 @@ console.log(`Pass-chain events: ${passChains}`);
 console.log(`Max calls in a game: ${maxCalls}`);
 
 if (stuckGames > 0 || failures > 0) {
-  console.error(`\nFAILED: ${stuckGames} stuck states, ${failures} failures`);
+  console.error(`\nFAILED: ${stuckGames} stuck, ${failures} failures`);
   process.exit(1);
 }
 
-console.log(`\nPASSED: ${totalGames}/${totalGames} games complete, 0 stuck states`);
+console.log(`\nPASSED: ${totalGames}/${totalGames} games, 0 stuck states`);
 process.exit(0);

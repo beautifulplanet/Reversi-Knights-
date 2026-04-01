@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+﻿import { useRef, useEffect, useCallback } from 'react';
 import type { CellState } from './useReversiEngine';
 
 interface ReversiBoardProps {
@@ -8,19 +8,17 @@ interface ReversiBoardProps {
   flippedDiscs: number[];
   turn: 1 | 2;
   boardSize: number;
-  knightMode: boolean;
+  isKnightPhase: boolean;
   disabled: boolean;
   onCellClick: (pos: number) => void;
 }
 
 const PADDING = 2;
-
-// Colors (hardcoded — CSS vars don't work in canvas)
 const BOARD_BG = '#2d8a4e';
 const GRID_LINES = '#1a6b35';
 const BOARD_BORDER = '#1a4830';
 const VALID_MOVE_DOT = 'rgba(255, 255, 255, 0.25)';
-const KNIGHT_MOVE_DOT = 'rgba(124, 106, 247, 0.45)';
+const KNIGHT_MOVE_DOT = 'rgba(124, 106, 247, 0.5)';
 const LAST_MOVE_HIGHLIGHT = 'rgba(255, 200, 0, 0.4)';
 const DISC_SHADOW = 'rgba(0,0,0,0.3)';
 
@@ -33,25 +31,19 @@ interface AnimState {
 }
 
 export default function ReversiBoard({
-  board, legalMoves, lastMove, flippedDiscs, turn: _turn, boardSize, knightMode, disabled, onCellClick
+  board, legalMoves, lastMove, flippedDiscs, turn: _turn, boardSize, isKnightPhase, disabled, onCellClick
 }: ReversiBoardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animRef = useRef<AnimState>({
-    flipProgress: new Map(),
-    flipOrigColor: new Map(),
-    dropProgress: null,
-    dropPos: null,
-    running: false,
-  });
+  const animRef = useRef<AnimState>({ flipProgress: new Map(), flipOrigColor: new Map(), dropProgress: null, dropPos: null, running: false });
   const rafRef = useRef<number>(0);
   const boardRef = useRef(board);
   const legalRef = useRef(legalMoves);
   const lastMoveRef = useRef(lastMove);
-  const knightModeRef = useRef(knightMode);
+  const knightPhaseRef = useRef(isKnightPhase);
   boardRef.current = board;
   legalRef.current = legalMoves;
   lastMoveRef.current = lastMove;
-  knightModeRef.current = knightMode;
+  knightPhaseRef.current = isKnightPhase;
 
   const getCellSize = useCallback(() => {
     const canvas = canvasRef.current;
@@ -83,25 +75,19 @@ export default function ReversiBoard({
     const anim = animRef.current;
     const cells = boardSize * boardSize;
 
-    // Board background
+    // Board
     ctx.fillStyle = BOARD_BORDER;
     ctx.fillRect(0, 0, displaySize, displaySize);
     ctx.fillStyle = BOARD_BG;
     ctx.fillRect(PADDING, PADDING, displaySize - PADDING * 2, displaySize - PADDING * 2);
 
-    // Grid lines
+    // Grid
     ctx.strokeStyle = GRID_LINES;
     ctx.lineWidth = 1;
     for (let i = 0; i <= boardSize; i++) {
       const p = PADDING + i * cellSize;
-      ctx.beginPath();
-      ctx.moveTo(p, PADDING);
-      ctx.lineTo(p, displaySize - PADDING);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(PADDING, p);
-      ctx.lineTo(displaySize - PADDING, p);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(p, PADDING); ctx.lineTo(p, displaySize - PADDING); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(PADDING, p); ctx.lineTo(displaySize - PADDING, p); ctx.stroke();
     }
 
     // Last move highlight
@@ -112,10 +98,13 @@ export default function ReversiBoard({
       ctx.fillRect(PADDING + col * cellSize, PADDING + row * cellSize, cellSize, cellSize);
     }
 
-    // Draw discs
+    // Pieces
     for (let i = 0; i < cells; i++) {
       const cellColor = b[i];
       if (cellColor === 0) continue;
+
+      const isKnight = cellColor === 3 || cellColor === 4;
+      const owner = isKnight ? cellColor - 2 : cellColor;
 
       const row = Math.floor(i / boardSize);
       const col = i % boardSize;
@@ -123,86 +112,61 @@ export default function ReversiBoard({
       const cy = PADDING + row * cellSize + cellSize / 2;
       const radius = cellSize * 0.38;
 
-      // Animation state
-      let scaleX = 1;
-      let scaleY = 1;
-      let drawColor: number = cellColor;
+      let scaleX = 1, scaleY = 1;
+      let drawColor: number = owner;
 
-      // Flip animation
       if (anim.flipProgress.has(i)) {
         const prog = anim.flipProgress.get(i)!;
         const origColor = anim.flipOrigColor.get(i)!;
-        if (prog < 0.5) {
-          scaleX = 1 - prog * 2; // squeeze from 1 to 0
-          drawColor = origColor;
-        } else {
-          scaleX = (prog - 0.5) * 2; // expand from 0 to 1
-          drawColor = cellColor;
-        }
+        if (prog < 0.5) { scaleX = 1 - prog * 2; drawColor = origColor; }
+        else { scaleX = (prog - 0.5) * 2; drawColor = owner; }
       }
 
-      // Drop animation
       if (anim.dropPos === i && anim.dropProgress !== null) {
-        const prog = anim.dropProgress;
-        scaleX = prog;
-        scaleY = prog;
+        scaleX = anim.dropProgress; scaleY = anim.dropProgress;
       }
 
-      // Shadow
       ctx.save();
       ctx.translate(cx, cy);
       ctx.scale(scaleX, scaleY);
-      ctx.beginPath();
-      ctx.arc(1.5, 1.5, radius, 0, Math.PI * 2);
-      ctx.fillStyle = DISC_SHADOW;
-      ctx.fill();
 
-      // Disc gradient
+      // Shadow
+      ctx.beginPath(); ctx.arc(1.5, 1.5, radius, 0, Math.PI * 2);
+      ctx.fillStyle = DISC_SHADOW; ctx.fill();
+
+      // Disc
       const grad = ctx.createRadialGradient(-radius * 0.3, -radius * 0.3, radius * 0.1, 0, 0, radius);
-      if (drawColor === 1) {
-        grad.addColorStop(0, '#4a4a4a');
-        grad.addColorStop(1, '#1a1a1a');
-      } else {
-        grad.addColorStop(0, '#fffbe8');
-        grad.addColorStop(1, '#f0ead6');
-      }
+      if (drawColor === 1) { grad.addColorStop(0, '#4a4a4a'); grad.addColorStop(1, '#1a1a1a'); }
+      else { grad.addColorStop(0, '#fffbe8'); grad.addColorStop(1, '#f0ead6'); }
+      ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fillStyle = grad; ctx.fill();
 
-      ctx.beginPath();
-      ctx.arc(0, 0, radius, 0, Math.PI * 2);
-      ctx.fillStyle = grad;
-      ctx.fill();
+      // Knight symbol
+      if (isKnight) {
+        ctx.font = `bold ${Math.round(cellSize * 0.5)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = drawColor === 1 ? '#e0e0e0' : '#2a2a2a';
+        ctx.fillText('\u265E', 0, 2);
+      }
       ctx.restore();
     }
 
-    // Valid move dots or knight mode indicators
-    if (knightModeRef.current) {
-      // In knight mode: show purple dots on all empty cells
-      for (let i = 0; i < cells; i++) {
-        if (b[i] !== 0) continue;
-        const row = Math.floor(i / boardSize);
-        const col = i % boardSize;
-        const cx = PADDING + col * cellSize + cellSize / 2;
-        const cy = PADDING + row * cellSize + cellSize / 2;
-        ctx.beginPath();
-        ctx.arc(cx, cy, cellSize * 0.12, 0, Math.PI * 2);
-        ctx.fillStyle = KNIGHT_MOVE_DOT;
-        ctx.fill();
-      }
-    } else {
-      for (const pos of legal) {
-        const row = Math.floor(pos / boardSize);
-        const col = pos % boardSize;
-        const cx = PADDING + col * cellSize + cellSize / 2;
-        const cy = PADDING + row * cellSize + cellSize / 2;
-        ctx.beginPath();
-        ctx.arc(cx, cy, cellSize * 0.12, 0, Math.PI * 2);
-        ctx.fillStyle = VALID_MOVE_DOT;
-        ctx.fill();
-      }
+    // Legal move dots
+    const dotColor = knightPhaseRef.current ? KNIGHT_MOVE_DOT : VALID_MOVE_DOT;
+    for (const pos of legal) {
+      const row = Math.floor(pos / boardSize);
+      const col = pos % boardSize;
+      const cx = PADDING + col * cellSize + cellSize / 2;
+      const cy = PADDING + row * cellSize + cellSize / 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, cellSize * 0.12, 0, Math.PI * 2);
+      ctx.fillStyle = dotColor;
+      ctx.fill();
     }
   }, [boardSize]);
 
-  // Start animations when flippedDiscs or lastMove change
+  // Animations
   useEffect(() => {
     const anim = animRef.current;
     anim.flipProgress.clear();
@@ -214,7 +178,7 @@ export default function ReversiBoard({
       const newColor = board[flippedDiscs[0]];
       const origColor = newColor === 1 ? 2 : 1;
       for (let idx = 0; idx < flippedDiscs.length; idx++) {
-        anim.flipProgress.set(flippedDiscs[idx], -idx * 0.15); // stagger start
+        anim.flipProgress.set(flippedDiscs[idx], -idx * 0.15);
         anim.flipOrigColor.set(flippedDiscs[idx], origColor);
       }
     }
@@ -229,55 +193,32 @@ export default function ReversiBoard({
         anim.running = true;
         const tick = () => {
           let allDone = true;
-
-          // Advance flip animations
           for (const [pos, prog] of anim.flipProgress) {
             const next = prog + 0.06;
-            if (next >= 1) {
-              anim.flipProgress.delete(pos);
-              anim.flipOrigColor.delete(pos);
-            } else {
-              anim.flipProgress.set(pos, next);
-              allDone = false;
-            }
+            if (next >= 1) { anim.flipProgress.delete(pos); anim.flipOrigColor.delete(pos); }
+            else { anim.flipProgress.set(pos, next); allDone = false; }
           }
-
-          // Advance drop animation
           if (anim.dropProgress !== null) {
             anim.dropProgress += 0.08;
-            if (anim.dropProgress >= 1) {
-              anim.dropProgress = null;
-              anim.dropPos = null;
-            } else {
-              allDone = false;
-            }
+            if (anim.dropProgress >= 1) { anim.dropProgress = null; anim.dropPos = null; }
+            else allDone = false;
           }
-
           drawBoard();
-
-          if (allDone) {
-            anim.running = false;
-          } else {
-            rafRef.current = requestAnimationFrame(tick);
-          }
+          if (allDone) anim.running = false;
+          else rafRef.current = requestAnimationFrame(tick);
         };
         rafRef.current = requestAnimationFrame(tick);
       }
     } else {
       drawBoard();
     }
-
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [board, flippedDiscs, lastMove, drawBoard]);
 
-  // Redraw on legal moves or knight mode change (no animation)
   useEffect(() => {
     if (!animRef.current.running) drawBoard();
-  }, [legalMoves, knightMode, drawBoard]);
+  }, [legalMoves, isKnightPhase, drawBoard]);
 
-  // Handle resize
   useEffect(() => {
     const onResize = () => drawBoard();
     window.addEventListener('resize', onResize);
@@ -289,27 +230,20 @@ export default function ReversiBoard({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
+    const cellSize = getCellSize();
     const x = e.clientX - rect.left - PADDING;
     const y = e.clientY - rect.top - PADDING;
-    const cellSize = getCellSize();
     const col = Math.floor(x / cellSize);
     const row = Math.floor(y / cellSize);
-    if (row < 0 || row >= boardSize || col < 0 || col >= boardSize) return;
-    const pos = row * boardSize + col;
-    if (knightModeRef.current) {
-      // In knight mode, any empty cell is valid
-      if (boardRef.current[pos] === 0) onCellClick(pos);
-    } else {
-      if (legalMoves.includes(pos)) onCellClick(pos);
-    }
-  }, [disabled, legalMoves, onCellClick, getCellSize]);
+    if (col < 0 || col >= boardSize || row < 0 || row >= boardSize) return;
+    onCellClick(row * boardSize + col);
+  }, [disabled, boardSize, getCellSize, onCellClick]);
 
   return (
     <canvas
       ref={canvasRef}
-      className="reversi-canvas"
       onClick={handleClick}
-      style={{ cursor: disabled ? 'default' : 'pointer' }}
+      style={{ cursor: disabled ? 'default' : 'pointer', borderRadius: '8px', display: 'block', margin: '0 auto' }}
     />
   );
 }

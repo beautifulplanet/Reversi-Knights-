@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useReversiEngine, type GameMode, type ReversiEngine } from './useReversiEngine';
 import ReversiBoard from './ReversiBoard';
 
@@ -10,68 +10,38 @@ function Lobby({ onStart }: { onStart: (mode: GameMode, difficulty: number, boar
   return (
     <div className="lobby">
       <h1 className="lobby-title">Reversi Knights</h1>
-
       <div className="lobby-card">
         <div className="lobby-section">
           <label className="lobby-label">Game Mode</label>
           <div className="lobby-buttons">
-            <button
-              className={`lobby-btn ${mode === 'ai' ? 'active' : ''}`}
-              onClick={() => setMode('ai')}
-            >
-              vs AI
-            </button>
-            <button
-              className={`lobby-btn ${mode === 'pvp' ? 'active' : ''}`}
-              onClick={() => setMode('pvp')}
-            >
-              vs Player
-            </button>
+            <button className={`lobby-btn ${mode === 'ai' ? 'active' : ''}`} onClick={() => setMode('ai')}>vs AI</button>
+            <button className={`lobby-btn ${mode === 'pvp' ? 'active' : ''}`} onClick={() => setMode('pvp')}>vs Player</button>
           </div>
         </div>
-
         {mode === 'ai' && (
           <div className="lobby-section">
-            <label className="lobby-label">
-              Difficulty: {difficulty}
-            </label>
-            <input
-              type="range"
-              min={1}
-              max={10}
-              value={difficulty}
-              onChange={(e) => setDifficulty(Number(e.target.value))}
-              className="lobby-slider"
-            />
+            <label className="lobby-label">Difficulty: {difficulty}</label>
+            <input type="range" min={1} max={10} value={difficulty} onChange={(e) => setDifficulty(Number(e.target.value))} className="lobby-slider" />
           </div>
         )}
-
         <div className="lobby-section">
           <label className="lobby-label">Board Size</label>
           <div className="lobby-buttons">
             {[8, 10, 12, 16].map(s => (
-              <button
-                key={s}
-                className={`lobby-btn ${boardSize === s ? 'active' : ''}`}
-                onClick={() => setBoardSize(s)}
-              >
-                {s}×{s}
-              </button>
+              <button key={s} className={`lobby-btn ${boardSize === s ? 'active' : ''}`} onClick={() => setBoardSize(s)}>{s}x{s}</button>
             ))}
           </div>
         </div>
-
-        <button className="start-btn" onClick={() => onStart(mode, difficulty, boardSize)}>
-          Start Game
-        </button>
+        <button className="start-btn" onClick={() => onStart(mode, difficulty, boardSize)}>Start Game</button>
       </div>
     </div>
   );
 }
 
 function GameView({ engine }: { engine: ReversiEngine }) {
-  const { state, phase, mode, difficulty, boardSize, thinking, canUndo, knightMode, knightAvailable, playMove, undo, toggleKnight, newGame } = engine;
+  const { state, phase, mode, difficulty, boardSize, thinking, canUndo, playMove, undo, newGame } = engine;
   const isPlayerTurn = mode === 'pvp' || state.turn === 1;
+  const isKnightPhase = state.turnPhase === 'knight';
 
   return (
     <div className="game-view">
@@ -82,16 +52,13 @@ function GameView({ engine }: { engine: ReversiEngine }) {
         </div>
         <div className="game-status">
           {phase === 'gameover'
-            ? state.blackCount > state.whiteCount
-              ? 'Black Wins!'
-              : state.whiteCount > state.blackCount
-                ? 'White Wins!'
-                : 'Draw!'
-            : thinking
-              ? 'AI thinking...'
-              : isPlayerTurn
-                ? `${state.turn === 1 ? 'Black' : 'White'}'s turn`
-                : 'AI\'s turn'}
+            ? state.blackCount > state.whiteCount ? 'Black Wins!'
+              : state.whiteCount > state.blackCount ? 'White Wins!'
+              : 'Draw!'
+            : thinking ? 'AI thinking...'
+            : isPlayerTurn
+              ? `${state.turn === 1 ? 'Black' : 'White'} - ${isKnightPhase ? 'Move Knight' : 'Place Disc'}`
+              : "AI's turn"}
         </div>
         <div className={`score-player ${state.turn === 2 ? 'active-turn' : ''}`}>
           <span className="disc-icon white-disc" />
@@ -106,32 +73,16 @@ function GameView({ engine }: { engine: ReversiEngine }) {
         flippedDiscs={state.flippedDiscs}
         turn={state.turn}
         boardSize={boardSize}
-        knightMode={knightMode && isPlayerTurn && !thinking}
+        isKnightPhase={isKnightPhase && isPlayerTurn && !thinking}
         disabled={!isPlayerTurn || thinking || phase === 'gameover'}
         onCellClick={playMove}
       />
 
       <div className="game-controls">
-        {mode === 'ai' && (
-          <span className="difficulty-label">Difficulty: {difficulty}</span>
-        )}
-        <button
-          className="undo-btn"
-          onClick={undo}
-          disabled={!canUndo || thinking}
-        >
-          Undo
-        </button>
-        <button
-          className={`knight-btn ${knightMode ? 'active' : ''}`}
-          onClick={toggleKnight}
-          disabled={!knightAvailable || thinking || phase === 'gameover'}
-        >
-          ♞ Knight
-        </button>
-        <button className="new-game-btn" onClick={newGame}>
-          New Game
-        </button>
+        {mode === 'ai' && <span className="difficulty-label">Difficulty: {difficulty}</span>}
+        {isPlayerTurn && isKnightPhase && <span className="phase-label">Move your Knight (L-shape)</span>}
+        <button className="undo-btn" onClick={undo} disabled={!canUndo || thinking}>Undo</button>
+        <button className="new-game-btn" onClick={newGame}>New Game</button>
       </div>
     </div>
   );
