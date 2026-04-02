@@ -35,9 +35,9 @@ function getSizeData(size: number): SizeData {
   // Corners
   const corners = [0, S, S * size, S * size + S];
 
-  // X-squares (diagonally adjacent to corners)
+  // X-squares (diagonally adjacent to corners) — xCorner maps to which corner each X-square belongs to
   const xSq = [size + 1, size + S - 1, (S - 1) * size + 1, (S - 1) * size + S - 1];
-  const xCorner = [corners[0], corners[1], corners[2], corners[3]];
+  const xCorner = corners;
 
   // C-squares (orthogonally adjacent to corners)
   const cSq = [1, size, S - 1, size + S, (S - 1) * size, S * size + 1, S * size + S - 1, (S - 1) * size + S];
@@ -78,10 +78,8 @@ function getSizeData(size: number): SizeData {
 // ── Pre-allocated Buffers (module scope, zero allocation in AI hot path) ──
 
 const _moveBufs: Int16Array[] = [];
-const _moveCounts: number[] = [];
 for (let d = 0; d < 20; d++) {
   _moveBufs.push(new Int16Array(MAX_CELLS));
-  _moveCounts.push(0);
 }
 
 const _boardStack: number[][] = [];
@@ -104,8 +102,9 @@ function initialBoard(size: number): number[] {
 }
 
 function countDiscs(board: number[], color: number, cells: number): number {
+  const knightVal = color + 2;
   let c = 0;
-  for (let i = 0; i < cells; i++) if (board[i] === color) c++;
+  for (let i = 0; i < cells; i++) if (board[i] === color || board[i] === knightVal) c++;
   return c;
 }
 
@@ -114,6 +113,7 @@ function countDiscs(board: number[], color: number, cells: number): number {
 function hasFlips(board: number[], pos: number, color: number, size: number): boolean {
   if (board[pos] !== 0) return false;
   const opp = 3 - color;
+  const friendly2 = color + 2; // knight cell value
   const r0 = Math.floor(pos / size), c0 = pos % size;
   for (let d = 0; d < 8; d++) {
     let r = r0 + DR[d], c = c0 + DC[d];
@@ -121,7 +121,7 @@ function hasFlips(board: number[], pos: number, color: number, size: number): bo
     while (r >= 0 && r < size && c >= 0 && c < size) {
       const idx = r * size + c;
       if (board[idx] === opp) { found = true; }
-      else if (board[idx] === color) { if (found) return true; break; }
+      else if (board[idx] === color || board[idx] === friendly2) { if (found) return true; break; }
       else break;
       r += DR[d]; c += DC[d];
     }
@@ -132,6 +132,7 @@ function hasFlips(board: number[], pos: number, color: number, size: number): bo
 function applyMoveInPlace(board: number[], pos: number, color: number, size: number): void {
   board[pos] = color;
   const opp = 3 - color;
+  const friendly2 = color + 2; // knight cell value
   const r0 = Math.floor(pos / size), c0 = pos % size;
   for (let d = 0; d < 8; d++) {
     let r = r0 + DR[d], c = c0 + DC[d];
@@ -139,7 +140,7 @@ function applyMoveInPlace(board: number[], pos: number, color: number, size: num
     while (r >= 0 && r < size && c >= 0 && c < size) {
       const idx = r * size + c;
       if (board[idx] === opp) { count++; }
-      else if (board[idx] === color) {
+      else if (board[idx] === color || board[idx] === friendly2) {
         let fr = r0 + DR[d], fc = c0 + DC[d];
         for (let k = 0; k < count; k++) {
           board[fr * size + fc] = color;
@@ -179,11 +180,14 @@ function evaluate(board: number[], aiColor: number, sd: SizeData): number {
   let aiDiscs = 0, oppDiscs = 0;
   let posScore = 0;
 
+  const aiKnight = aiColor + 2;
+  const oppKnight = opp + 2;
   for (let i = 0; i < cells; i++) {
-    if (board[i] === aiColor) {
+    const v = board[i];
+    if (v === aiColor || v === aiKnight) {
       aiDiscs++;
       posScore += sd.posWeights[i];
-    } else if (board[i] === opp) {
+    } else if (v === opp || v === oppKnight) {
       oppDiscs++;
       posScore -= sd.posWeights[i];
     }
@@ -241,6 +245,7 @@ function getFlips(board: number[], pos: number, color: number, size: number): nu
   const flips: number[] = [];
   if (board[pos] !== 0) return flips;
   const opp = 3 - color;
+  const friendly2 = color + 2; // knight cell value
   const r0 = Math.floor(pos / size), c0 = pos % size;
   for (let d = 0; d < 8; d++) {
     const dirFlips: number[] = [];
@@ -248,7 +253,7 @@ function getFlips(board: number[], pos: number, color: number, size: number): nu
     while (r >= 0 && r < size && c >= 0 && c < size) {
       const idx = r * size + c;
       if (board[idx] === opp) { dirFlips.push(idx); }
-      else if (board[idx] === color) {
+      else if (board[idx] === color || board[idx] === friendly2) {
         for (const f of dirFlips) flips.push(f);
         break;
       }
