@@ -361,28 +361,50 @@ function getKnightDestinations(fromPos: number, size: number, board: number[]): 
 }
 
 function getKnightLandingFlips(board: number[], pos: number, color: number, size: number): number[] {
+  // Same Reversi sandwich-flip logic as getFlips — trace lines in 8 directions
   const flips: number[] = [];
+  if (board[pos] !== 0 && board[pos] !== 3 && board[pos] !== 4) return flips;
   const opp = 3 - color;
   const r0 = Math.floor(pos / size), c0 = pos % size;
   for (let d = 0; d < 8; d++) {
-    const r = r0 + DR[d], c = c0 + DC[d];
-    if (r >= 0 && r < size && c >= 0 && c < size) {
+    const dirFlips: number[] = [];
+    let r = r0 + DR[d], c = c0 + DC[d];
+    while (r >= 0 && r < size && c >= 0 && c < size) {
       const idx = r * size + c;
-      if (board[idx] === opp) flips.push(idx);
+      if (board[idx] === opp) { dirFlips.push(idx); }
+      else if (board[idx] === color || board[idx] === color + 2) {
+        for (const f of dirFlips) flips.push(f);
+        break;
+      }
+      else break;
+      r += DR[d]; c += DC[d];
     }
   }
   return flips;
 }
 
 function applyKnightLanding(board: number[], pos: number, color: number, size: number): void {
+  // Place knight marker, then apply standard Reversi sandwich-flip in all 8 directions
   board[pos] = knightCellValue(color);
   const opp = 3 - color;
   const r0 = Math.floor(pos / size), c0 = pos % size;
   for (let d = 0; d < 8; d++) {
-    const r = r0 + DR[d], c = c0 + DC[d];
-    if (r >= 0 && r < size && c >= 0 && c < size) {
+    let r = r0 + DR[d], c = c0 + DC[d];
+    let count = 0;
+    while (r >= 0 && r < size && c >= 0 && c < size) {
       const idx = r * size + c;
-      if (board[idx] === opp) board[idx] = color;
+      if (board[idx] === opp) { count++; }
+      else if (board[idx] === color || board[idx] === color + 2) {
+        // Flip all opponent discs in this direction
+        let fr = r0 + DR[d], fc = c0 + DC[d];
+        for (let k = 0; k < count; k++) {
+          board[fr * size + fc] = color;
+          fr += DR[d]; fc += DC[d];
+        }
+        break;
+      }
+      else break;
+      r += DR[d]; c += DC[d];
     }
   }
 }
