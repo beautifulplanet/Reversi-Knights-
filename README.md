@@ -47,10 +47,17 @@ This isn't my first attempt. **Go Ultra** was the first iteration — a differen
 
 **Reversi Knights was a cold run done in ~3 hours.** Not because I'm fast — because I'd already made every mistake in the previous iterations and documented them. The speed came from lessons learned, not skill:
 
-- V1 taught me that WASM ↔ React bridges are fragile — so V2 is pure TypeScript
-- V1 taught me that batching 4 features in one prompt stalls — so I did one feature per commit
-- V1 taught me that claiming code works before testing is how you close bugs that aren't fixed — so every change runs 4 test gates before pushing
-- V1 taught me that PowerShell `>` creates UTF-16 files — so I use proper encoding
+| Iteration | What it taught me | Link |
+|-----------|------------------|------|
+| [GO-Ultra](https://github.com/beautifulplanet/GO-Ultra) | First attempt at AI board game with WASM — learned the hard way that complex toolchains slow everything down | [Repo →](https://github.com/beautifulplanet/GO-Ultra) |
+| [Reversi-Ultra](https://github.com/beautifulplanet/Reversi-Ultra) | 5 rewrite cycles fighting WASM ↔ React bridge bugs (borrow tracking, GC, StrictMode double-mount) — V2 spec said "never again" | [Repo →](https://github.com/beautifulplanet/Reversi-Ultra) |
+| **Reversi Knights** (this repo) | Applied every lesson: pure TS, one feature per commit, 4-gate testing, no claims without proof | You're here |
+
+Specific lessons that shaped this build:
+- WASM ↔ React bridges are fragile → pure TypeScript, zero native dependencies
+- Batching 4 features in one prompt stalls → one feature per commit
+- Claiming code works before testing = closing bugs that aren't fixed → 4 test gates before every push
+- PowerShell `>` creates UTF-16 files → proper encoding everywhere
 
 The lesson files ([`LESSONS.md`](../Reversi%20Ultra/LESSONS.md), [`CONSTRUCTION-REVERSI-V2.md`](../Reversi%20Ultra/CONSTRUCTION-REVERSI-V2.md)) are the real source of this project's velocity. The code is the output. The learning is the work.
 
