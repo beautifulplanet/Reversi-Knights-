@@ -52,7 +52,7 @@ Scaffolded with AI assistance (GitHub Copilot in VS Code). Every change reviewed
 | Stack + resume bullets | [Impact ↑](#impact) | 30 sec |
 | Proof (tests, CI) | [Evidence ↑](#evidence) | 1 min |
 | Architecture | [Architecture ↓](#architecture) | 1 min |
-| Interview drill | [Interview Drill ↓](#interview-drill-sheet) | 2 min |
+| Technical FAQ | [FAQ ↓](#technical-faq) | 2 min |
 
 ### If you want to run it
 
@@ -290,7 +290,7 @@ Full issue history: [github.com/beautifulplanet/Reversi-Knights-/issues](https:/
 
 ---
 
-## Interview Drill Sheet
+## Technical FAQ
 
 | Question | Short Answer |
 |---|---|
