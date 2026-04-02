@@ -1,3 +1,10 @@
 node_modules/
 dist/
 *.local
+
+# Private workflow files — never push these
+AGENTS.md
+LESSONS.md
+SESSION.md
+CONSTRUCTION-*.md
+SCOPE-*.md
