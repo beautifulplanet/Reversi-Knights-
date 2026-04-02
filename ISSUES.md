@@ -6,13 +6,7 @@
 
 ## OPEN
 
-| # | Title | Type | Priority |
-|---|-------|------|----------|
-| 30 | Save game system with tamper-resistant local storage | enhancement | P2-MED |
-| 28 | newGame() always resets to 8x8 | bug | P2-MED |
-| 20 | Animation interruption can cause visual glitch | bug | P2-MED |
-| 18 | snake_case public API vs camelCase internals | enhancement | P3-LOW |
-| 15 | Magic numbers throughout engine evaluation | enhancement | P3-LOW |
+*None — all issues resolved.*
 
 ---
 
@@ -20,9 +14,15 @@
 
 | # | Title | Type | Closed By |
 |---|-------|------|-----------|
+| 36 | Accessibility — ARIA labels, keyboard nav, screen reader | enhancement | ddaad5b |
+| 35 | Touch optimization for mobile | enhancement | ddaad5b |
+| 34 | Difficulty slider maps 10→4 levels fix | bug | verified already fixed |
+| 33 | Corner/X/C bonuses ignore knight cell values | bug | verified already fixed |
 | 32 | Active knight capture (chess-style takes) | enhancement | 1026f9c |
 | 31 | AI chess-hybrid knight algorithm | enhancement | 1026f9c |
+| 30 | Save game system with tamper-resistant local storage | enhancement | ddaad5b |
 | 29 | AI knight strategic mission — 4-pos history, future threats, depth-3, forks | bug | 1026f9c |
+| 28 | newGame() always resets to 8x8 | bug | verified already fixed |
 | 27 | Dead code: _moveCounts array never read | enhancement | c186245 |
 | 26 | getFlips (UI) doesn't recognize knights as anchors | bug | c186245 |
 | 25 | evaluate() ignores knight cells — AI blind to positions | bug | c186245 |
@@ -30,6 +30,9 @@
 | 23 | countDiscs ignores knight cells — score display wrong | bug | c186245 |
 | 22 | Knight does not capture — 1-adjacent flip → sandwich-flip | bug | c186245 |
 | 21 | Deploy to GitHub Pages | enhancement | commit |
+| 20 | Animation interruption can cause visual glitch | bug | verified already fixed |
+| 18 | snake_case public API vs camelCase internals | enhancement | verified already fixed |
+| 15 | Magic numbers throughout engine evaluation | enhancement | verified already fixed |
 | 14 | Redundant xCorner variable | enhancement | c186245 |
 | 13 | Dead code: _moveCounts array is never read | enhancement | c186245 |
 | 12 | Add CI pipeline (GitHub Actions) | enhancement | commit |
