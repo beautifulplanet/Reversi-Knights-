@@ -15,7 +15,7 @@ for (const size of SIZES) {
     let stuck = 0;
 
     // Verify initial state
-    const initBoard = game.get_board();
+    const initBoard = game.getBoard();
     if (initBoard.length !== cells) {
       console.error(`Size ${size} Game ${g}: board length ${initBoard.length} !== ${cells}`);
       failures++;
@@ -29,10 +29,10 @@ for (const size of SIZES) {
       continue;
     }
 
-    while (!game.is_game_over()) {
-      const phase = game.turn_phase();
-      const legal = game.get_legal_moves();
-      const turn = game.current_turn();
+    while (!game.isGameOver()) {
+      const phase = game.turnPhase();
+      const legal = game.getLegalMoves();
+      const turn = game.currentTurn();
 
       if (legal.length === 0) {
         stuck++;
@@ -42,7 +42,7 @@ for (const size of SIZES) {
           break;
         }
         // Let AI handle pass/skip logic
-        game.ai_move(1);
+        game.aiMove(1);
         moves++;
         continue;
       }
@@ -54,9 +54,9 @@ for (const size of SIZES) {
         const pos = legal[Math.floor(Math.random() * legal.length)];
         let ok: boolean;
         if (phase === 'knight') {
-          ok = game.make_knight_move(pos);
+          ok = game.makeKnightMove(pos);
         } else {
-          ok = game.make_move(pos);
+          ok = game.makeMove(pos);
         }
         if (!ok) {
           console.error(`Size ${size} Game ${g}: move(${pos}) returned false for legal move, phase=${phase}`);
@@ -66,7 +66,7 @@ for (const size of SIZES) {
       } else {
         // AI move
         const t0 = performance.now();
-        game.ai_move(size > 8 ? 2 : 3);
+        game.aiMove(size > 8 ? 2 : 3);
         const elapsed = performance.now() - t0;
         if (elapsed > maxAiTime) maxAiTime = elapsed;
       }

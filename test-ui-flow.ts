@@ -17,7 +17,7 @@ for (const size of SIZES) {
     let calls = 0;
     let gameStuck = false;
 
-    while (!game.is_game_over()) {
+    while (!game.isGameOver()) {
       calls++;
       if (calls > 1200) {
         console.error(`Size ${size} Game ${g}: exceeded 1200 calls`);
@@ -26,20 +26,20 @@ for (const size of SIZES) {
         break;
       }
 
-      const turn = game.current_turn();
-      const phase = game.turn_phase();
-      const legal = game.get_legal_moves();
+      const turn = game.currentTurn();
+      const phase = game.turnPhase();
+      const legal = game.getLegalMoves();
 
       if (turn === 1) {
         // Player turn - act based on phase
         if (legal.length === 0) {
           // Pass - let AI handle
-          game.ai_move(1);
+          game.aiMove(1);
           continue;
         }
 
         if (phase === 'knight') {
-          const ok = game.make_knight_move(legal[Math.floor(Math.random() * legal.length)]);
+          const ok = game.makeKnightMove(legal[Math.floor(Math.random() * legal.length)]);
           if (!ok) {
             console.error(`Size ${size} Game ${g}: knight move failed on legal target`);
             failures++;
@@ -48,8 +48,8 @@ for (const size of SIZES) {
           }
         } else {
           const pos = legal[Math.floor(Math.random() * legal.length)];
-          const _flips = game.get_flips(pos);
-          const ok = game.make_move(pos);
+          game.getFlips(pos);
+          const ok = game.makeMove(pos);
           if (!ok) {
             console.error(`Size ${size} Game ${g}: disc move(${pos}) failed for legal move`);
             failures++;
@@ -60,8 +60,8 @@ for (const size of SIZES) {
       } else {
         // AI turn - chain until turn passes to player or game ends
         let chainCount = 0;
-        while (game.current_turn() === 2 && !game.is_game_over()) {
-          game.ai_move(2);
+        while (game.currentTurn() === 2 && !game.isGameOver()) {
+          game.aiMove(2);
           calls++;
           chainCount++;
           if (chainCount > 200) {

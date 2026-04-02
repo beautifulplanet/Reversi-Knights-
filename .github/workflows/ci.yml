@@ -28,5 +28,8 @@ jobs:
       - name: UI flow tests (2000 games)
         run: npx tsx test-ui-flow.ts
 
+      - name: Knight capture tests
+        run: npx tsx test-knight-captures.ts
+
       - name: Build
         run: npm run build

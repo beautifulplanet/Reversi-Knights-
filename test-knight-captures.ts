@@ -15,7 +15,7 @@ function assert(cond: boolean, msg: string) {
 console.log('\n=== Test 1: Disc move sandwiching to knight ===');
 {
   const g = new Game(8);
-  const board = g.get_board();
+  const board = g.getBoard();
   
   // Setup: place black knight (3) at position 0, opponent disc at 1, 
   // then try placing black disc at 2 — should sandwich white at 1
@@ -49,8 +49,8 @@ console.log('\n=== Test 2: Score counts exclude knights ===');
   const g = new Game(8);
   // Starting: 2 black discs + 1 black knight; 2 white discs + 1 white knight
   // black_count should be 3 (2 discs + 1 knight), white_count should be 3
-  const bc = g.black_count();
-  const wc = g.white_count();
+  const bc = g.blackCount();
+  const wc = g.whiteCount();
   console.log(`  black_count=${bc}, white_count=${wc}`);
   assert(bc === 3, `black_count should be 3 (2 discs + 1 knight), got ${bc}`);
   assert(wc === 3, `white_count should be 3 (2 discs + 1 knight), got ${wc}`);
@@ -91,15 +91,15 @@ console.log('\n=== Test 5: Knight landing sandwich-flip works ===');
 {
   const g = new Game(8);
   // Play some moves to advance the game
-  const moves = g.get_legal_moves();
+  const moves = g.getLegalMoves();
   if (moves.length > 0) {
-    g.make_move(moves[0]); // Black disc move
+    g.makeMove(moves[0]); // Black disc move
     // Now in knight phase for black
-    const knightTargets = g.get_legal_moves();
+    const knightTargets = g.getLegalMoves();
     if (knightTargets.length > 0) {
-      const flips = g.get_knight_landing_flips(knightTargets[0]);
+      const flips = g.getKnightLandingFlips(knightTargets[0]);
       console.log(`  Knight move to ${knightTargets[0]}: would flip ${flips.length} discs`);
-      g.make_knight_move(knightTargets[0]);
+      g.makeKnightMove(knightTargets[0]);
       console.log('  Knight move succeeded');
     }
   }

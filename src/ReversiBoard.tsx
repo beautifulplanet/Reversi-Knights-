@@ -45,12 +45,11 @@ export default function ReversiBoard({
   lastMoveRef.current = lastMove;
   knightPhaseRef.current = isKnightPhase;
 
+  const getDisplaySize = useCallback(() => Math.min(560, window.innerWidth - 40), []);
+
   const getCellSize = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return 60;
-    const displaySize = parseInt(canvas.style.width) || 560;
-    return (displaySize - PADDING * 2) / boardSize;
-  }, [boardSize]);
+    return (getDisplaySize() - PADDING * 2) / boardSize;
+  }, [boardSize, getDisplaySize]);
 
   const drawBoard = useCallback(() => {
     const canvas = canvasRef.current;
@@ -59,7 +58,7 @@ export default function ReversiBoard({
     if (!ctx) return;
 
     const dpr = window.devicePixelRatio || 1;
-    const displaySize = Math.min(560, window.innerWidth - 40);
+    const displaySize = getDisplaySize();
     const needsResize = canvas.width !== displaySize * dpr || canvas.height !== displaySize * dpr;
     if (needsResize) {
       canvas.width = displaySize * dpr;
@@ -164,7 +163,7 @@ export default function ReversiBoard({
       ctx.fillStyle = dotColor;
       ctx.fill();
     }
-  }, [boardSize]);
+  }, [boardSize, getDisplaySize]);
 
   // Animations
   useEffect(() => {
@@ -189,9 +188,12 @@ export default function ReversiBoard({
     }
 
     if (flippedDiscs.length > 0 || (lastMove !== null && lastMove >= 0)) {
-      if (!anim.running) {
-        anim.running = true;
-        const tick = () => {
+      // Cancel any running animation and restart
+      if (anim.running && rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+      anim.running = true;
+      const tick = () => {
           let allDone = true;
           for (const [pos, prog] of anim.flipProgress) {
             const next = prog + 0.06;
@@ -208,7 +210,6 @@ export default function ReversiBoard({
           else rafRef.current = requestAnimationFrame(tick);
         };
         rafRef.current = requestAnimationFrame(tick);
-      }
     } else {
       drawBoard();
     }

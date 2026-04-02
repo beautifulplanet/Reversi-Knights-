@@ -8,6 +8,17 @@ const KNIGHT_DR = [-2, -2, -1, -1, 1, 1, 2, 2];
 const KNIGHT_DC = [-1, 1, -2, 2, -2, 2, -1, 1];
 
 const MAX_CELLS = 256; // 16x16 max
+const MAX_DEPTH = 20;
+const MAX_NODES = 50000;
+const NEG_INF = -999999;
+const POS_INF = 999999;
+const TERMINAL_MULTIPLIER = 1000;
+const CORNER_BONUS = 50;
+const X_SQUARE_PENALTY = 30;
+const C_SQUARE_PENALTY = 15;
+const EARLY_PHASE_RATIO = 0.3;
+const LATE_PHASE_RATIO = 0.75;
+const MAX_AI_DEPTH = 6;
 
 // ── Per-size caches (generated once per size) ──
 
@@ -78,15 +89,14 @@ function getSizeData(size: number): SizeData {
 // ── Pre-allocated Buffers (module scope, zero allocation in AI hot path) ──
 
 const _moveBufs: Int16Array[] = [];
-for (let d = 0; d < 20; d++) {
+for (let d = 0; d < MAX_DEPTH; d++) {
   _moveBufs.push(new Int16Array(MAX_CELLS));
 }
 
 const _boardStack: number[][] = [];
-for (let d = 0; d < 20; d++) _boardStack.push(new Array(MAX_CELLS).fill(0));
+for (let d = 0; d < MAX_DEPTH; d++) _boardStack.push(new Array(MAX_CELLS).fill(0));
 
 let _nodeCount = 0;
-const MAX_NODES = 50000;
 
 // ── Helpers ──
 
@@ -197,12 +207,12 @@ function evaluate(board: number[], aiColor: number, sd: SizeData): number {
 
   // Terminal position: pure disc count
   if (total === cells || (!hasMoves(board, aiColor, size) && !hasMoves(board, opp, size))) {
-    return (aiDiscs - oppDiscs) * 1000;
+    return (aiDiscs - oppDiscs) * TERMINAL_MULTIPLIER;
   }
 
   // Phase thresholds scaled by board size
-  const earlyThresh = Math.floor(cells * 0.3);
-  const lateThresh = Math.floor(cells * 0.75);
+  const earlyThresh = Math.floor(cells * EARLY_PHASE_RATIO);
+  const lateThresh = Math.floor(cells * LATE_PHASE_RATIO);
 
   let score = 0;
   if (total < earlyThresh) {
@@ -216,23 +226,39 @@ function evaluate(board: number[], aiColor: number, sd: SizeData): number {
   // Corner bonus
   for (let ci = 0; ci < 4; ci++) {
     const corner = sd.corners[ci];
-    if (board[corner] === aiColor) score += 50;
-    else if (board[corner] === opp) score -= 50;
+    if (board[corner] === aiColor) score += CORNER_BONUS;
+    else if (board[corner] === opp) score -= CORNER_BONUS;
   }
 
   // X-square penalty (only if corner is empty)
   for (let xi = 0; xi < 4; xi++) {
     if (board[sd.xCorner[xi]] === 0) {
-      if (board[sd.xSq[xi]] === aiColor) score -= 30;
-      else if (board[sd.xSq[xi]] === opp) score += 30;
+      if (board[sd.xSq[xi]] === aiColor) score -= X_SQUARE_PENALTY;
+      else if (board[sd.xSq[xi]] === opp) score += X_SQUARE_PENALTY;
     }
   }
 
   // C-square penalty (only if corner is empty)
   for (let ci = 0; ci < 8; ci++) {
     if (board[sd.cCorner[ci]] === 0) {
-      if (board[sd.cSq[ci]] === aiColor) score -= 15;
-      else if (board[sd.cSq[ci]] === opp) score += 15;
+      if (board[sd.cSq[ci]] === aiColor) score -= C_SQUARE_PENALTY;
+      else if (board[sd.cSq[ci]] === opp) score += C_SQUARE_PENALTY;
+    }
+  }
+
+  // Knight evaluation (chess-style: centralization + mobility)
+  const aiKnightVal = aiColor + 2;
+  const oppKnightVal = opp + 2;
+  for (let i = 0; i < cells; i++) {
+    if (board[i] === aiKnightVal) {
+      // Centralization bonus: knight is stronger near the center
+      const kr = Math.floor(i / size), kc = i % size;
+      const centerDist = Math.abs(kr - size / 2 + 0.5) + Math.abs(kc - size / 2 + 0.5);
+      score += Math.max(0, size - centerDist) * 2;
+    } else if (board[i] === oppKnightVal) {
+      const kr = Math.floor(i / size), kc = i % size;
+      const centerDist = Math.abs(kr - size / 2 + 0.5) + Math.abs(kc - size / 2 + 0.5);
+      score -= Math.max(0, size - centerDist) * 2;
     }
   }
 
@@ -296,7 +322,7 @@ function minimax(
   const child = _boardStack[ply];
 
   if (maximizing) {
-    let best = -999999;
+    let best = NEG_INF;
     for (let i = 0; i < moveCount; i++) {
       if (_nodeCount > MAX_NODES) break;
       for (let j = 0; j < sd.cells; j++) child[j] = board[j];
@@ -308,7 +334,7 @@ function minimax(
     }
     return best;
   } else {
-    let best = 999999;
+    let best = POS_INF;
     for (let i = 0; i < moveCount; i++) {
       if (_nodeCount > MAX_NODES) break;
       for (let j = 0; j < sd.cells; j++) child[j] = board[j];
@@ -322,9 +348,15 @@ function minimax(
   }
 }
 
-// ── bestMove (root search with alpha narrowing) ──
+// ── bestMove (root search with knight-integrated evaluation) ──
+// Chess-hybrid: each disc move candidate is paired with its best knight
+// follow-up before minimax evaluation, so the AI considers the FULL turn
+// (disc + knight) as a unit — like a chess engine evaluating piece positions.
 
-function bestMove(board: number[], color: number, depthLimit: number, sd: SizeData): number {
+function bestMove(
+  board: number[], color: number, depthLimit: number, sd: SizeData,
+  knightPos?: [number, number]
+): number {
   const moves = getLegalMoves(board, color, sd.size);
   if (moves.length === 0) return -1;
   if (moves.length === 1) return moves[0];
@@ -332,15 +364,46 @@ function bestMove(board: number[], color: number, depthLimit: number, sd: SizeDa
   moves.sort((a, b) => sd.posWeights[b] - sd.posWeights[a]);
 
   let best = moves[0];
-  let bestScore = -999999;
-  let alpha = -999999;
+  let bestScore = NEG_INF;
+  let alpha = NEG_INF;
   _nodeCount = 0;
+
+  const kp = knightPos ?? [-1, -1];
+  const myKp = kp[color - 1];
 
   for (const pos of moves) {
     if (_nodeCount > MAX_NODES) break;
     const next = board.slice(0, sd.cells);
     applyMoveInPlace(next, pos, color, sd.size);
-    const score = minimax(next, depthLimit - 1, alpha, 999999, false, color, 1, sd);
+
+    // If we have a knight, simulate the best follow-up knight move on this board
+    if (myKp >= 0) {
+      const dests = getKnightDestinations(myKp, sd.size, next, color);
+      if (dests.length > 0) {
+        let bestKnightBoard: number[] | null = null;
+        let bestKnightEval = NEG_INF;
+        for (const kDest of dests) {
+          const kBoard = next.slice();
+          kBoard[myKp] = 0; // clear old knight position
+          applyKnightLanding(kBoard, kDest, color, sd.size);
+          const kEval = evaluate(kBoard, color, sd);
+          if (kEval > bestKnightEval) {
+            bestKnightEval = kEval;
+            bestKnightBoard = kBoard;
+          }
+        }
+        // Evaluate the combined (disc + knight) position
+        if (bestKnightBoard) {
+          const score = minimax(bestKnightBoard, depthLimit - 1, alpha, POS_INF, false, color, 1, sd);
+          if (score > bestScore) { bestScore = score; best = pos; }
+          if (score > alpha) alpha = score;
+          continue;
+        }
+      }
+    }
+
+    // No knight available — evaluate disc move alone
+    const score = minimax(next, depthLimit - 1, alpha, POS_INF, false, color, 1, sd);
     if (score > bestScore) { bestScore = score; best = pos; }
     if (score > alpha) alpha = score;
   }
@@ -352,14 +415,16 @@ function bestMove(board: number[], color: number, depthLimit: number, sd: SizeDa
 
 function knightCellValue(player: number): number { return player + 2; }
 
-function getKnightDestinations(fromPos: number, size: number, board: number[]): number[] {
+function getKnightDestinations(fromPos: number, size: number, board: number[], player?: number): number[] {
   const dests: number[] = [];
   const r0 = Math.floor(fromPos / size), c0 = fromPos % size;
+  const oppKnight = player ? (3 - player) + 2 : -1; // opponent's knight value
   for (let k = 0; k < 8; k++) {
     const r = r0 + KNIGHT_DR[k], c = c0 + KNIGHT_DC[k];
     if (r >= 0 && r < size && c >= 0 && c < size) {
       const idx = r * size + c;
-      if (board[idx] === 0) dests.push(idx);
+      // Can land on empty OR opponent's knight (capture)
+      if (board[idx] === 0 || board[idx] === oppKnight) dests.push(idx);
     }
   }
   return dests;
@@ -446,6 +511,7 @@ interface HistoryEntry {
   over: boolean;
   turnPhase: TurnPhase;
   knightPos: [number, number];
+  knightHistory: [number[], number[]];
 }
 
 export class Game {
@@ -457,6 +523,8 @@ export class Game {
   private _turnPhase: TurnPhase;
   // Knight positions: >=0 = cell index, -2 = captured
   private knightPos: [number, number];
+  // Anti-oscillation: track last 4 positions per player to prevent cycling
+  private _knightHistory: [number[], number[]];
   readonly size: number;
 
   constructor(size: number = 8) {
@@ -472,6 +540,7 @@ export class Game {
     // Place knights at opposite corners
     const cells = size * size;
     this.knightPos = [0, cells - 1];
+    this._knightHistory = [[], []];
     this.board[0] = 3;            // black knight top-left
     this.board[cells - 1] = 4;    // white knight bottom-right
   }
@@ -483,19 +552,20 @@ export class Game {
       over: this.over,
       turnPhase: this._turnPhase,
       knightPos: [this.knightPos[0], this.knightPos[1]],
+      knightHistory: [this._knightHistory[0].slice(), this._knightHistory[1].slice()],
     });
   }
 
   // ── Public getters ──
 
-  get_board(): number[]       { return this.board.slice(0, this.sd.cells); }
-  current_turn(): number      { return this.turn; }
-  is_game_over(): boolean     { return this.over; }
-  turn_phase(): TurnPhase     { return this._turnPhase; }
-  black_count(): number       { return countDiscs(this.board, 1, this.sd.cells); }
-  white_count(): number       { return countDiscs(this.board, 2, this.sd.cells); }
+  getBoard(): number[]       { return this.board.slice(0, this.sd.cells); }
+  currentTurn(): number      { return this.turn; }
+  isGameOver(): boolean     { return this.over; }
+  turnPhase(): TurnPhase     { return this._turnPhase; }
+  blackCount(): number       { return countDiscs(this.board, 1, this.sd.cells); }
+  whiteCount(): number       { return countDiscs(this.board, 2, this.sd.cells); }
 
-  get_knight_pos(player?: number): number {
+  getKnightPos(player?: number): number {
     const p = player ?? this.turn;
     return this.knightPos[p - 1];
   }
@@ -503,24 +573,24 @@ export class Game {
   // Phase-aware legal moves:
   //   disc phase  → valid disc placements
   //   knight phase → valid L-shape destinations
-  get_legal_moves(): number[] {
+  getLegalMoves(): number[] {
     if (this._turnPhase === 'knight') {
       return this.getKnightTargets();
     }
     return getLegalMoves(this.board, this.turn, this.size);
   }
 
-  get_flips(pos: number): number[] {
+  getFlips(pos: number): number[] {
     return getFlips(this.board, pos, this.turn, this.size);
   }
 
-  get_knight_landing_flips(pos: number): number[] {
+  getKnightLandingFlips(pos: number): number[] {
     return getKnightLandingFlips(this.board, pos, this.turn, this.size);
   }
 
   // ── Disc move (disc phase only) ──
 
-  make_move(pos: number): boolean {
+  makeMove(pos: number): boolean {
     if (this.over || this._turnPhase !== 'disc') return false;
     if (pos < 0 || pos >= this.sd.cells) return false;
     if (!hasFlips(this.board, pos, this.turn, this.size)) return false;
@@ -532,7 +602,7 @@ export class Game {
 
   // ── Knight move (knight phase only) ──
 
-  make_knight_move(pos: number): boolean {
+  makeKnightMove(pos: number): boolean {
     if (this.over || this._turnPhase !== 'knight') return false;
     const targets = this.getKnightTargets();
     if (!targets.includes(pos)) return false;
@@ -545,9 +615,9 @@ export class Game {
 
   // ── AI ──
 
-  ai_move(depth: number): number {
+  aiMove(depth: number): number {
     if (this.over) return -1;
-    depth = Math.min(6, Math.max(1, depth));
+    depth = Math.min(MAX_AI_DEPTH, Math.max(1, depth));
 
     if (this._turnPhase === 'disc') {
       const discMoves = getLegalMoves(this.board, this.turn, this.size);
@@ -557,7 +627,7 @@ export class Game {
         this.enterKnightPhase();
         return -1;
       }
-      const pos = bestMove(this.board, this.turn, depth, this.sd);
+      const pos = bestMove(this.board, this.turn, depth, this.sd, this.knightPos);
       if (pos < 0) {
         this.snapshot();
         this.enterKnightPhase();
@@ -575,7 +645,7 @@ export class Game {
 
   // ── Undo / Reset ──
 
-  can_undo(): boolean {
+  canUndo(): boolean {
     return this.history.length > 0;
   }
 
@@ -587,6 +657,7 @@ export class Game {
     this.over = prev.over;
     this._turnPhase = prev.turnPhase;
     this.knightPos = prev.knightPos;
+    this._knightHistory = prev.knightHistory;
     return true;
   }
 
@@ -596,6 +667,7 @@ export class Game {
     this.board[0] = 3;
     this.board[cells - 1] = 4;
     this.knightPos = [0, cells - 1];
+    this._knightHistory = [[], []];
     this.turn = 1;
     this.over = false;
     this._turnPhase = 'disc';
@@ -604,13 +676,13 @@ export class Game {
 
   // ── Knight methods ──
 
-  knight_can_act(): boolean {
+  knightCanAct(): boolean {
     const kp = this.knightPos[this.turn - 1];
     if (kp < 0) return false;
-    return getKnightDestinations(kp, this.size, this.board).length > 0;
+    return getKnightDestinations(kp, this.size, this.board, this.turn).length > 0;
   }
 
-  get_knight_targets(): number[] {
+  getKnightTargetsPublic(): number[] {
     return this.getKnightTargets();
   }
 
@@ -619,13 +691,26 @@ export class Game {
   private getKnightTargets(): number[] {
     const kp = this.knightPos[this.turn - 1];
     if (kp < 0) return []; // captured
-    return getKnightDestinations(kp, this.size, this.board);
+    return getKnightDestinations(kp, this.size, this.board, this.turn);
   }
 
   private moveKnight(targetPos: number): void {
     const p = this.turn;
     const oldKp = this.knightPos[p - 1];
+    // Track position history for anti-oscillation (keep last 4)
+    const hist = this._knightHistory[p - 1];
+    if (oldKp >= 0) hist.push(oldKp);
+    if (hist.length > 4) hist.shift();
+
     if (oldKp >= 0) this.board[oldKp] = 0; // clear old position
+
+    // Check for active capture — landing on opponent's knight
+    const oppIdx = (3 - p) - 1;
+    if (this.knightPos[oppIdx] === targetPos) {
+      this.board[targetPos] = 0; // remove opponent knight first
+      this.knightPos[oppIdx] = -2; // mark as captured
+    }
+
     applyKnightLanding(this.board, targetPos, p, this.size);
     this.knightPos[p - 1] = targetPos;
   }
@@ -656,17 +741,95 @@ export class Game {
       this.advanceTurn();
       return targets[0];
     }
-    // Pick best target by evaluation
+
+    // ── Chess-hybrid knight evaluation ──
+    // A chess knight's value comes from: placement, threats, safety, and purpose.
+    // "A knight on the rim is dim." — penalize edge/corner positions
+    // "Knights need outposts." — reward squares that threaten enemy clusters
+    // "Capture hanging pieces." — always take opponent knight if possible
+    //
+    // Evaluation = tactical + future_threat + safety + minimax(depth 3)
+
     let bestTarget = targets[0];
-    let bestScore = -999999;
+    let bestScore = NEG_INF;
+    const p = this.turn;
+    const opp = 3 - p;
+    const oppKnightIdx = opp - 1;
+    const history = this._knightHistory[p - 1];
+    const { size } = this;
+
     for (const t of targets) {
       const testBoard = this.board.slice(0, this.sd.cells);
-      const oldKp = this.knightPos[this.turn - 1];
+      const oldKp = this.knightPos[p - 1];
       if (oldKp >= 0) testBoard[oldKp] = 0;
-      applyKnightLanding(testBoard, t, this.turn, this.size);
-      const score = evaluate(testBoard, this.turn, this.sd);
+
+      let score = 0;
+
+      // ── 1. Anti-oscillation: penalize ANY recently visited position ──
+      // More recent = heavier penalty (chess: don't repeat positions)
+      for (let h = history.length - 1, penalty = 250; h >= 0 && penalty > 0; h--, penalty -= 50) {
+        if (t === history[h]) { score -= penalty; break; }
+      }
+
+      // ── 2. Capture: taking opponent knight = massive material gain ──
+      if (this.knightPos[oppKnightIdx] === t) score += 500;
+
+      // ── 3. Direct material: count flips from landing ──
+      const flips = getKnightLandingFlips(testBoard, t, p, size);
+      score += flips.length * 20;
+
+      // Apply knight landing to get resulting position
+      applyKnightLanding(testBoard, t, p, size);
+
+      // ── 4. Future threat: count opponent discs at L-jump from NEW position ──
+      // This is the "knight fork" concept — how dangerous is the knight NEXT turn?
+      const futureTargets = getKnightDestinations(t, size, testBoard, p);
+      let futureFlipPotential = 0;
+      for (const ft of futureTargets) {
+        // Count how many opponent discs would flip if we landed there next turn
+        const futFlips = getKnightLandingFlips(testBoard, ft, p, size);
+        futureFlipPotential += futFlips.length;
+      }
+      score += futureFlipPotential * 5; // future threat value
+
+      // ── 5. Safety: capture risk assessment ──
+      const tr = Math.floor(t / size), tc = t % size;
+      let oppOrthCount = 0;
+      for (let d = 0; d < 4; d++) {
+        const nr = tr + ORTH_DR[d], nc = tc + ORTH_DC[d];
+        if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+        if (testBoard[nr * size + nc] === opp) oppOrthCount++;
+      }
+      if (oppOrthCount >= 4) score -= 300;  // certain capture
+      else if (oppOrthCount >= 3) score -= 100; // danger zone
+
+      // ── 6. Mobility: more future destinations = harder to trap ──
+      score += futureTargets.length * 4;
+
+      // ── 7. Knight centralization (chess principle) ──
+      // "A knight on the rim is dim" — penalize edge positions
+      const centerDist = Math.abs(tr - size / 2 + 0.5) + Math.abs(tc - size / 2 + 0.5);
+      const edgePenalty = (tr === 0 || tr === size - 1 || tc === 0 || tc === size - 1) ? -8 : 0;
+      score += Math.max(0, size - centerDist) * 2 + edgePenalty;
+
+      // ── 8. Opponent knight threat: can they capture us next? ──
+      const oppKp = this.knightPos[oppKnightIdx];
+      if (oppKp >= 0) {
+        const oppDests = getKnightDestinations(oppKp, size, testBoard, opp);
+        if (oppDests.includes(t)) score -= 60; // opponent could take us
+        // Bonus for threatening their knight (keeps them defensive)
+        if (futureTargets.includes(oppKp)) score += 40;
+      }
+
+      // ── 9. Positional evaluation via minimax (depth 3) ──
+      // Deep search to see opponent's response — chess-style look-ahead
+      _nodeCount = 0;
+      const posScore = minimax(testBoard, 3, NEG_INF, POS_INF, false, p, 1, this.sd);
+      score += posScore;
+
       if (score > bestScore) { bestScore = score; bestTarget = t; }
     }
+
     this.snapshot();
     this.moveKnight(bestTarget);
     this._turnPhase = 'disc';
@@ -701,7 +864,7 @@ export class Game {
     } else {
       // Next player has no disc moves — give them knight-only turn if possible
       const nextKnight = this.knightPos[next - 1];
-      if (nextKnight >= 0 && getKnightDestinations(nextKnight, this.size, this.board).length > 0) {
+      if (nextKnight >= 0 && getKnightDestinations(nextKnight, this.size, this.board, next).length > 0) {
         this.turn = next;
         this._turnPhase = 'knight'; // skip disc phase
         return;

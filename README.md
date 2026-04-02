@@ -8,8 +8,8 @@
 
 - **Playable right now** — [live on GitHub Pages](https://beautifulplanet.github.io/Reversi-Knights-/) or `npm run dev` locally. No install, no account, no loading screen.
 - **Custom AI engine in pure TypeScript** — minimax with alpha-beta pruning, positional weight tables, 50K node budget. AI responds in <10ms on 8×8.
-- **Novel game mechanic** — persistent chess knights add a second layer of strategy to classic Reversi. Each turn: place a disc, then move your knight in an L-shape to flip adjacent opponent pieces.
-- **2,200 automated test games, zero failures** — 200-game engine test + 2,000-game UI flow simulation. Every commit is verified.
+- **Novel game mechanic** — persistent chess knights add a second layer of strategy to classic Reversi. Each turn: place a disc, then move your knight in an L-shape. Landing flips via Reversi sandwich rules (line-tracing, not adjacent). Knights can capture each other chess-style.
+- **2,200+ automated test games, zero failures** — 200-game engine test + 2,000-game UI flow simulation + knight capture regression tests. Every commit is verified.
 
 **Stack:** TypeScript · React · HTML5 Canvas · Vite
 
@@ -22,15 +22,16 @@
 | Zero type errors | `tsc --noEmit` |
 | Production build succeeds | `npm run build` |
 | CI pipeline | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
+| Knight capture tests | `npx tsx test-knight-captures.ts` |
 | Deployed | [beautifulplanet.github.io/Reversi-Knights-](https://beautifulplanet.github.io/Reversi-Knights-/) |
-| 21 issues tracked | [Issues →](https://github.com/beautifulplanet/Reversi-Knights-/issues?q=is:issue) |
+| 32 issues tracked (20 closed, 12 open) | [Issues →](https://github.com/beautifulplanet/Reversi-Knights-/issues?q=is:issue) |
 
 ### Quality Bar
 
 - **200-game engine stress test** — random + AI games across board sizes (8×8, 10×10), validates move legality, flip correctness, game termination, and AI speed (<50ms budget)
 - **2,000-game UI flow simulation** — exercises the exact React hook call sequence (startGame → playMove → AI chain → pass handling → game over), catches stuck states and stale closures
 - **TypeScript strict mode clean** — `tsc --noEmit` with zero errors on every commit
-- **GitHub Actions CI** — all 3 gates run on every push and PR to `main`
+- **GitHub Actions CI** — all 4 gates run on every push and PR to `main` (tsc, engine, UI flow, knight captures)
 
 ### Ownership & Quality
 
@@ -114,9 +115,10 @@ npm run build                     # TypeScript check + Vite → dist/
 - Black's knight starts at top-left corner; White's at bottom-right
 - Each turn has **two phases**: place a disc, then move your knight
 - Knights move in **L-shapes** (chess knight movement: 2+1 squares)
-- When a knight lands, it **flips all adjacent opponent discs** (8 directions)
-- Knights cannot be flipped and block disc placement on their cell
-- If a knight is surrounded on all 4 orthogonal sides by opponent discs, it is **captured**
+- When a knight lands, it **flips opponent discs using Reversi sandwich rules** — traces lines in 8 directions, flipping all bracketed opponent pieces
+- Knights can **capture the opponent's knight** by landing on its cell (chess-style take)
+- Knights cannot be flipped by normal disc moves and block disc placement on their cell
+- If a knight is surrounded on all 4 orthogonal sides by opponent discs, it is **captured and removed**
 
 ### Board Sizes
 
@@ -153,19 +155,20 @@ Choose 8×8, 10×10, 12×12, or 16×16 from the lobby. AI adapts its positional 
 
 | File | Lines | Responsibility |
 |---|---|---|
-| `engine.ts` | 592 | Game state, move validation, flip logic, minimax AI, knight mechanics |
-| `ReversiBoard.tsx` | 219 | Canvas renderer — board, discs, knight pieces, flip/drop animations, click handling |
-| `useReversiEngine.ts` | 157 | React hook — state management, AI scheduling, two-phase turn flow, undo |
-| `App.tsx` | 88 | Lobby (mode, difficulty, board size), game chrome (scores, status, undo button) |
-| `global.css` | 214 | Responsive layout, dark theme, lobby styling |
+| `engine.ts` | 834 | Game state, move validation, flip logic, minimax AI, chess-hybrid knight AI, knight captures |
+| `ReversiBoard.tsx` | 250 | Canvas renderer — board, discs, knight pieces (♞ overlay), flip/drop animations, click handling |
+| `useReversiEngine.ts` | 192 | React hook — state management, AI scheduling with chain guard, two-phase turn flow, undo |
+| `App.tsx` | 95 | Lobby (mode, difficulty, board size), game chrome (scores, status, phase indicator, undo button) |
+| `global.css` | 252 | Responsive layout, dark theme, lobby styling, phase labels |
 | `main.tsx` | 4 | React root mount |
 
 ### 2 Test Files
 
 | File | Lines | What it tests |
 |---|---|---|
-| `test-engine.ts` | 86 | 200 random+AI games across board sizes — move legality, flip correctness, termination, AI speed |
-| `test-ui-flow.ts` | 87 | 2,000 games exercising the exact hook call sequence — pass chains, stuck states, game completion |
+| `test-engine.ts` | 99 | 200 random+AI games across board sizes — move legality, flip correctness, termination, AI speed |
+| `test-ui-flow.ts` | 98 | 2,000 games exercising the exact hook call sequence — pass chains, stuck states, game completion |
+| `test-knight-captures.ts` | 117 | Knight regression tests — sandwich flips, friendly anchor recognition, score counting, disc-through-knight flips |
 
 ---
 
@@ -173,7 +176,7 @@ Choose 8×8, 10×10, 12×12, or 16×16 from the lobby. AI adapts its positional 
 
 ### Board Representation
 
-Flat `Int8Array` indexed by `row * size + col`. Values: `0` = empty, `1` = black, `2` = white, `3` = black knight, `4` = white knight.
+Flat `number[]` array indexed by `row * size + col`. Values: `0` = empty, `1` = black disc, `2` = white disc, `3` = black knight, `4` = white knight. All engine functions recognize `color + 2` as a friendly piece for sandwich anchoring.
 
 Position weights are mirror-symmetric per board size, generated once and cached:
 - Corners: +100
@@ -198,7 +201,7 @@ Minimax with alpha-beta pruning:
 
 Two-phase AI per turn:
 1. **Disc phase:** standard minimax selects best disc move
-2. **Knight phase:** evaluates all L-shape destinations by adjacent flip count, picks the best landing
+2. **Knight phase:** chess-hybrid evaluation — scores each L-shape destination using minimax lookahead (depth 2), flip count, positional weight, capture bonus (+300), capture risk penalty, and anti-oscillation tracking
 
 ### Key Design Decisions
 
@@ -250,13 +253,14 @@ GitHub Actions runs on every push and PR to `main`:
 | `tsc --noEmit` | Zero type errors |
 | `npx tsx test-engine.ts` | 200/200 games pass |
 | `npx tsx test-ui-flow.ts` | 2000/2000 games pass |
+| `npx tsx test-knight-captures.ts` | Knight regression suite passes |
 | `npm run build` | Production build succeeds |
 
 ---
 
 ## Development History
 
-### Issues Resolved
+### Issues Resolved (20 closed)
 
 | # | Type | Title |
 |---|---|---|
@@ -272,19 +276,31 @@ GitHub Actions runs on every push and PR to `main`:
 | 10 | Bug | Games stuck in infinite pass-chains with knight moves |
 | 11 | Bug | Knights rendered as regular discs (invisible) |
 | 12 | Feature | CI pipeline (GitHub Actions) |
+| 13 | Enhancement | Dead code: `_moveCounts` removed |
+| 14 | Enhancement | Redundant `xCorner` simplified |
+| 21 | Feature | Deploy to GitHub Pages |
+| 22 | Bug | Knight used 1-adjacent flip instead of Reversi sandwich rules |
+| 23 | Bug | `countDiscs` excluded knight cells from score display |
+| 24 | Bug | `hasFlips`/`applyMoveInPlace` treated knights as walls |
+| 25 | Bug | `evaluate()` was blind to knight positions |
+| 26 | Bug | `getFlips` (UI) didn't recognize knights as sandwich anchors |
 
-### Open Issues (from code audit)
+### Open Issues (12 remaining)
 
-| # | Type | Title |
+| # | Priority | Title |
 |---|---|---|
-| 13 | Enhancement | Dead code: `_moveCounts` array never used |
-| 14 | Enhancement | Redundant `xCorner` variable |
-| 15 | Enhancement | Magic numbers in evaluation |
-| 16 | Enhancement | No recursion guard on AI chaining |
-| 17 | Bug | `getCellSize` reads `style.width` before render |
-| 18 | Enhancement | snake_case vs camelCase API inconsistency |
-| 19 | Enhancement | AI knight evaluation is only 1-ply |
-| 20 | Bug | Animation interruption visual glitch |
+| 15 | P3-LOW | Magic numbers in evaluation |
+| 16 | P3-LOW | AI chain recursion guard |
+| 17 | P2-MED | `getCellSize` mobile viewport |
+| 18 | P3-LOW | snake_case vs camelCase API |
+| 19 | P2-MED | AI knight evaluation depth |
+| 20 | P2-MED | Animation interruption glitch |
+| 27 | P3-LOW | Dead `_moveCounts` duplicate issue |
+| 28 | P2-MED | `newGame()` resets to 8×8 |
+| 29 | P1-HIGH | AI knight strategic mission |
+| 30 | P2-MED | Save game system |
+| 31 | P1-HIGH | AI chess-hybrid knight algorithm |
+| 32 | P1-HIGH | Active knight capture (chess-style takes) |
 
 Full issue history: [github.com/beautifulplanet/Reversi-Knights-/issues](https://github.com/beautifulplanet/Reversi-Knights-/issues?q=is:issue)
 
@@ -298,9 +314,9 @@ Full issue history: [github.com/beautifulplanet/Reversi-Knights-/issues](https:/
 | How does the AI work? | Minimax with alpha-beta pruning, depth 1–6, 50K node cap. Move ordering by positional weights. Phase-dependent evaluation blends position vs disc count. |
 | How do you prevent stale closures in React? | Every callback reads from refs (`gameRef`, `modeRef`, `difficultyRef`), not from state captured at render time. |
 | Why canvas instead of DOM? | 60fps flip animations. Single draw call per frame. DPR-aware. DOM would require 64–256 elements with individual transforms. |
-| How does the knight mechanic work? | Persistent piece, L-shape movement every turn. Flips adjacent opponent discs on landing. Can be captured when surrounded orthogonally. Two-phase turns: disc → knight. |
+| How does the knight mechanic work? | Persistent piece, L-shape movement every turn. Landing flips via Reversi sandwich rules (same line-tracing as disc moves). Can capture opponent's knight by landing on it. Two-phase turns: disc → knight. |
 | How do you handle variable board sizes? | `getSizeData(size)` generates and caches positional weights, corner/edge indices, and move ordering for any even size 4–16. Flat `Int8Array` board, same engine code for all sizes. |
-| What would you do differently? | Named constants for magic numbers. Web Worker for AI on 16×16. Deeper knight evaluation (minimax instead of 1-ply). E2E tests with Playwright. |
+| What would you do differently? | Web Worker for AI on 16×16. Deeper knight evaluation (full integrated minimax). E2E tests with Playwright. Save/load games with tamper-resistant serialization. |
 | How do you test a game? | 200-game engine stress test + 2,000-game UI flow simulation. Both are deterministic replay of the exact function call sequence. CI runs on every push. |
 
 ---
@@ -310,15 +326,15 @@ Full issue history: [github.com/beautifulplanet/Reversi-Knights-/issues](https:/
 | Metric | Value |
 |---|---|
 | Source files | 6 (+ 2 test files) |
-| Total source lines | ~1,275 |
-| Engine lines | 592 |
+| Total source lines | ~1,628 |
+| Engine lines | 834 |
 | Test games (engine) | 200, 0 failures |
 | Test games (UI flow) | 2,000, 0 stuck states |
 | Max AI response (8×8) | 3.5ms |
 | Board sizes | 4×4, 6×6, 8×8, 10×10, 12×12, 14×14, 16×16 |
 | AI depth range | 1–6 |
 | Node budget | 50,000 |
-| GitHub issues | 20 (12 closed, 8 open) |
+| GitHub issues | 32 (20 closed, 12 open) |
 
 ---
 
