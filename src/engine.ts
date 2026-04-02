@@ -223,26 +223,31 @@ function evaluate(board: number[], aiColor: number, sd: SizeData): number {
     score = (aiDiscs - oppDiscs) * 5 + posScore;
   }
 
-  // Corner bonus
+  // Corner bonus (check discs AND knights)
   for (let ci = 0; ci < 4; ci++) {
     const corner = sd.corners[ci];
-    if (board[corner] === aiColor) score += CORNER_BONUS;
-    else if (board[corner] === opp) score -= CORNER_BONUS;
+    const cv = board[corner];
+    if (cv === aiColor || cv === aiKnight) score += CORNER_BONUS;
+    else if (cv === opp || cv === oppKnight) score -= CORNER_BONUS;
   }
 
-  // X-square penalty (only if corner is empty)
+  // X-square penalty (only if corner is empty — no disc OR knight)
   for (let xi = 0; xi < 4; xi++) {
-    if (board[sd.xCorner[xi]] === 0) {
-      if (board[sd.xSq[xi]] === aiColor) score -= X_SQUARE_PENALTY;
-      else if (board[sd.xSq[xi]] === opp) score += X_SQUARE_PENALTY;
+    const cv = board[sd.xCorner[xi]];
+    if (cv === 0) {
+      const xv = board[sd.xSq[xi]];
+      if (xv === aiColor || xv === aiKnight) score -= X_SQUARE_PENALTY;
+      else if (xv === opp || xv === oppKnight) score += X_SQUARE_PENALTY;
     }
   }
 
-  // C-square penalty (only if corner is empty)
+  // C-square penalty (only if corner is empty — no disc OR knight)
   for (let ci = 0; ci < 8; ci++) {
-    if (board[sd.cCorner[ci]] === 0) {
-      if (board[sd.cSq[ci]] === aiColor) score -= C_SQUARE_PENALTY;
-      else if (board[sd.cSq[ci]] === opp) score += C_SQUARE_PENALTY;
+    const cv = board[sd.cCorner[ci]];
+    if (cv === 0) {
+      const csq = board[sd.cSq[ci]];
+      if (csq === aiColor || csq === aiKnight) score -= C_SQUARE_PENALTY;
+      else if (csq === opp || csq === oppKnight) score += C_SQUARE_PENALTY;
     }
   }
 
@@ -525,6 +530,8 @@ export class Game {
   private knightPos: [number, number];
   // Anti-oscillation: track last 4 positions per player to prevent cycling
   private _knightHistory: [number[], number[]];
+  // Turn pass tracking: 0 = no pass, 1 = Black passed, 2 = White passed
+  private _lastPassed: number;
   readonly size: number;
 
   constructor(size: number = 8) {
@@ -536,11 +543,13 @@ export class Game {
     this.over = false;
     this.history = [];
     this._turnPhase = 'disc';
+    this._lastPassed = 0;
 
     // Place knights at opposite corners
     const cells = size * size;
     this.knightPos = [0, cells - 1];
     this._knightHistory = [[], []];
+    this._lastPassed = 0;
     this.board[0] = 3;            // black knight top-left
     this.board[cells - 1] = 4;    // white knight bottom-right
   }
@@ -562,6 +571,7 @@ export class Game {
   currentTurn(): number      { return this.turn; }
   isGameOver(): boolean     { return this.over; }
   turnPhase(): TurnPhase     { return this._turnPhase; }
+  lastPassed(): number        { return this._lastPassed; }
   blackCount(): number       { return countDiscs(this.board, 1, this.sd.cells); }
   whiteCount(): number       { return countDiscs(this.board, 2, this.sd.cells); }
 
@@ -671,7 +681,53 @@ export class Game {
     this.turn = 1;
     this.over = false;
     this._turnPhase = 'disc';
+    this._lastPassed = 0;
     this.history = [];
+  }
+
+  // ── Save / Load (tamper-resistant) ──
+
+  serialize(): string {
+    const payload = {
+      v: 1,
+      size: this.size,
+      board: this.board.slice(0, this.sd.cells),
+      turn: this.turn,
+      over: this.over,
+      phase: this._turnPhase,
+      kp: this.knightPos,
+      kh: this._knightHistory,
+      lp: this._lastPassed,
+      hist: this.history,
+    };
+    const json = JSON.stringify(payload);
+    // Simple checksum: sum of all char codes mod 65521 (largest 16-bit prime)
+    let ck = 0;
+    for (let i = 0; i < json.length; i++) ck = (ck + json.charCodeAt(i)) % 65521;
+    const withCheck = JSON.stringify({ d: json, c: ck });
+    return btoa(withCheck);
+  }
+
+  static deserialize(encoded: string): Game {
+    let outer: { d: string; c: number };
+    try { outer = JSON.parse(atob(encoded)); }
+    catch { throw new Error('Invalid save data'); }
+    // Verify checksum
+    let ck = 0;
+    for (let i = 0; i < outer.d.length; i++) ck = (ck + outer.d.charCodeAt(i)) % 65521;
+    if (ck !== outer.c) throw new Error('Save data corrupted or tampered');
+    const p = JSON.parse(outer.d);
+    if (p.v !== 1) throw new Error('Unsupported save version');
+    const g = new Game(p.size);
+    g.board = p.board;
+    g.turn = p.turn;
+    g.over = p.over;
+    g._turnPhase = p.phase;
+    g.knightPos = p.kp;
+    g._knightHistory = p.kh;
+    g._lastPassed = p.lp;
+    g.history = p.hist;
+    return g;
   }
 
   // ── Knight methods ──
@@ -859,6 +915,7 @@ export class Game {
       return;
     }
 
+    this._lastPassed = 0;
     if (nextHasDisc) {
       this.turn = next;
     } else {
@@ -867,9 +924,11 @@ export class Game {
       if (nextKnight >= 0 && getKnightDestinations(nextKnight, this.size, this.board, next).length > 0) {
         this.turn = next;
         this._turnPhase = 'knight'; // skip disc phase
+        this._lastPassed = next; // notify UI that disc phase was skipped
         return;
       }
       // Next player can't do anything — current player goes again
+      this._lastPassed = next;
     }
   }
 }

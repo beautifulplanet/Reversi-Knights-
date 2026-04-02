@@ -127,6 +127,38 @@ button:focus-visible {
   opacity: 0.9;
 }
 
+.resume-btn {
+  padding: 14px 24px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  font-size: 1rem;
+  font-weight: 600;
+  transition: background 0.15s;
+}
+
+.resume-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.save-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  background: rgba(124, 106, 247, 0.2);
+  color: var(--accent);
+  font-size: 0.9rem;
+  transition: background 0.15s;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: rgba(124, 106, 247, 0.35);
+}
+
+.save-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 /* ── Game View ── */
 
 .game-view {
@@ -249,4 +281,23 @@ button:focus-visible {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+
+.pass-notice {
+  text-align: center;
+  padding: 6px 12px;
+  margin: 4px auto;
+  max-width: 280px;
+  border-radius: 6px;
+  background: rgba(255, 200, 0, 0.15);
+  color: #f0c040;
+  font-size: 0.85rem;
+  font-weight: 600;
+  animation: fadePass 2s ease-out forwards;
+}
+
+@keyframes fadePass {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
 }

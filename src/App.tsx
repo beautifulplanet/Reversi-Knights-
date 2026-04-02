@@ -2,7 +2,7 @@
 import { useReversiEngine, type GameMode, type ReversiEngine } from './useReversiEngine';
 import ReversiBoard from './ReversiBoard';
 
-function Lobby({ onStart }: { onStart: (mode: GameMode, difficulty: number, boardSize?: number) => void }) {
+function Lobby({ onStart, hasSave, onLoad }: { onStart: (mode: GameMode, difficulty: number, boardSize?: number) => void; hasSave: boolean; onLoad: () => void }) {
   const [mode, setMode] = useState<GameMode>('ai');
   const [difficulty, setDifficulty] = useState(5);
   const [boardSize, setBoardSize] = useState(8);
@@ -33,38 +33,44 @@ function Lobby({ onStart }: { onStart: (mode: GameMode, difficulty: number, boar
           </div>
         </div>
         <button className="start-btn" onClick={() => onStart(mode, difficulty, boardSize)}>Start Game</button>
+        {hasSave && <button className="resume-btn" onClick={onLoad}>Resume Saved Game</button>}
       </div>
     </div>
   );
 }
 
 function GameView({ engine }: { engine: ReversiEngine }) {
-  const { state, phase, mode, difficulty, boardSize, thinking, canUndo, playMove, undo, newGame } = engine;
+  const { state, phase, mode, difficulty, boardSize, thinking, canUndo, playMove, undo, newGame, saveGame } = engine;
   const isPlayerTurn = mode === 'pvp' || state.turn === 1;
   const isKnightPhase = state.turnPhase === 'knight';
 
+  const statusText = phase === 'gameover'
+    ? state.blackCount > state.whiteCount ? 'Black Wins!'
+      : state.whiteCount > state.blackCount ? 'White Wins!' : 'Draw!'
+    : thinking ? 'AI thinking...'
+    : isPlayerTurn
+      ? `${state.turn === 1 ? 'Black' : 'White'} - ${isKnightPhase ? 'Move Knight' : 'Place Disc'}`
+      : "AI's turn";
+
   return (
     <div className="game-view">
-      <div className="score-bar">
+      <div className="score-bar" role="status">
         <div className={`score-player ${state.turn === 1 ? 'active-turn' : ''}`}>
-          <span className="disc-icon black-disc" />
-          <span className="score-count">{state.blackCount}</span>
+          <span className="disc-icon black-disc" aria-hidden="true" />
+          <span className="score-count" aria-label={`Black: ${state.blackCount}`}>{state.blackCount}</span>
         </div>
-        <div className="game-status">
-          {phase === 'gameover'
-            ? state.blackCount > state.whiteCount ? 'Black Wins!'
-              : state.whiteCount > state.blackCount ? 'White Wins!'
-              : 'Draw!'
-            : thinking ? 'AI thinking...'
-            : isPlayerTurn
-              ? `${state.turn === 1 ? 'Black' : 'White'} - ${isKnightPhase ? 'Move Knight' : 'Place Disc'}`
-              : "AI's turn"}
+        <div className="game-status" aria-live="polite">
+          {statusText}
         </div>
         <div className={`score-player ${state.turn === 2 ? 'active-turn' : ''}`}>
-          <span className="disc-icon white-disc" />
-          <span className="score-count">{state.whiteCount}</span>
+          <span className="disc-icon white-disc" aria-hidden="true" />
+          <span className="score-count" aria-label={`White: ${state.whiteCount}`}>{state.whiteCount}</span>
         </div>
       </div>
+
+      {state.lastPassed > 0 && phase !== 'gameover' && (
+        <div className="pass-notice">{state.lastPassed === 1 ? 'Black' : 'White'} has no moves — passed</div>
+      )}
 
       <ReversiBoard
         board={state.board}
@@ -82,6 +88,7 @@ function GameView({ engine }: { engine: ReversiEngine }) {
         {mode === 'ai' && <span className="difficulty-label">Difficulty: {difficulty}</span>}
         {isPlayerTurn && isKnightPhase && <span className="phase-label">Move your Knight (L-shape)</span>}
         <button className="undo-btn" onClick={undo} disabled={!canUndo || thinking}>Undo</button>
+        <button className="save-btn" onClick={saveGame} disabled={thinking || phase === 'gameover'}>Save</button>
         <button className="new-game-btn" onClick={newGame}>New Game</button>
       </div>
     </div>
@@ -90,6 +97,6 @@ function GameView({ engine }: { engine: ReversiEngine }) {
 
 export default function App() {
   const engine = useReversiEngine();
-  if (engine.phase === 'lobby') return <Lobby onStart={engine.startGame} />;
+  if (engine.phase === 'lobby') return <Lobby onStart={engine.startGame} hasSave={engine.hasSave} onLoad={engine.loadGame} />;
   return <GameView engine={engine} />;
 }

@@ -15,6 +15,7 @@ export interface GameState {
   blackCount: number;
   whiteCount: number;
   isGameOver: boolean;
+  lastPassed: number;
   lastMove: number | null;
   flippedDiscs: number[];
 }
@@ -28,10 +29,13 @@ export interface ReversiEngine {
   thinking: boolean;
   ready: boolean;
   canUndo: boolean;
+  hasSave: boolean;
   startGame: (mode: GameMode, difficulty: number, boardSize?: number) => void;
   playMove: (pos: number) => void;
   undo: () => void;
   newGame: () => void;
+  saveGame: () => void;
+  loadGame: () => void;
 }
 
 // -- Helpers --
@@ -45,6 +49,7 @@ function readGameState(g: Game, lastMove: number | null, flippedDiscs: number[])
     blackCount: g.blackCount(),
     whiteCount: g.whiteCount(),
     isGameOver: g.isGameOver(),
+    lastPassed: g.lastPassed(),
     lastMove,
     flippedDiscs,
   };
@@ -60,6 +65,7 @@ export function useReversiEngine(): ReversiEngine {
   const [difficulty, setDifficulty] = useState(5);
   const [boardSize, setBoardSize] = useState(8);
   const [canUndo, setCanUndo] = useState(false);
+  const [hasSave, setHasSave] = useState(() => localStorage.getItem('reversi-knights-save') !== null);
 
   const modeRef = useRef(mode);
   const difficultyRef = useRef(difficulty);
@@ -77,7 +83,9 @@ export function useReversiEngine(): ReversiEngine {
     if (aiChainRef.current >= AI_CHAIN_LIMIT) { console.error('AI chain limit reached'); return; }
 
     const d = difficultyRef.current;
-    const depth = d <= 3 ? 1 : d <= 6 ? 2 : d <= 8 ? 3 : 4;
+    // 10 slider positions → 6 distinct depths (no duplicates above 2)
+    const depthMap = [1, 1, 2, 2, 3, 3, 4, 4, 5, 6];
+    const depth = depthMap[Math.min(d, 10) - 1] ?? 3;
     const cells = g.size * g.size;
     const boardBefore = g.getBoard();
 
@@ -185,8 +193,40 @@ export function useReversiEngine(): ReversiEngine {
     }
   }, []);
 
+  const saveGame = useCallback(() => {
+    try {
+      const data = gameRef.current.serialize();
+      const meta = JSON.stringify({ mode: modeRef.current, difficulty: difficultyRef.current });
+      localStorage.setItem('reversi-knights-save', data);
+      localStorage.setItem('reversi-knights-meta', meta);
+      setHasSave(true);
+    } catch { /* silently fail */ }
+  }, []);
+
+  const loadGame = useCallback(() => {
+    try {
+      const data = localStorage.getItem('reversi-knights-save');
+      const meta = localStorage.getItem('reversi-knights-meta');
+      if (!data) return;
+      const g = Game.deserialize(data);
+      gameRef.current = g;
+      if (meta) {
+        const m = JSON.parse(meta);
+        setMode(m.mode ?? 'ai');
+        setDifficulty(m.difficulty ?? 5);
+        modeRef.current = m.mode ?? 'ai';
+        difficultyRef.current = m.difficulty ?? 5;
+      }
+      setBoardSize(g.size);
+      setState(readGameState(g, null, []));
+      setCanUndo(g.canUndo());
+      setPhase(g.isGameOver() ? 'gameover' : 'playing');
+      phaseRef.current = g.isGameOver() ? 'gameover' : 'playing';
+    } catch { /* corrupted save — ignore */ }
+  }, []);
+
   return {
-    state, phase, mode, difficulty, boardSize, thinking, ready: true, canUndo,
-    startGame, playMove, undo, newGame,
+    state, phase, mode, difficulty, boardSize, thinking, ready: true, canUndo, hasSave,
+    startGame, playMove, undo, newGame, saveGame, loadGame,
   };
 }

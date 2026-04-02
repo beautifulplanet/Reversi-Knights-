@@ -240,11 +240,62 @@ export default function ReversiBoard({
     onCellClick(row * boardSize + col);
   }, [disabled, boardSize, getCellSize, onCellClick]);
 
+  const handleTouch = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    e.preventDefault(); // prevent double-tap zoom and ghost clicks
+    if (disabled) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+    const rect = canvas.getBoundingClientRect();
+    const cellSize = getCellSize();
+    const x = touch.clientX - rect.left - PADDING;
+    const y = touch.clientY - rect.top - PADDING;
+    const col = Math.floor(x / cellSize);
+    const row = Math.floor(y / cellSize);
+    if (col < 0 || col >= boardSize || row < 0 || row >= boardSize) return;
+    onCellClick(row * boardSize + col);
+  }, [disabled, boardSize, getCellSize, onCellClick]);
+
+  // Keyboard navigation for accessibility
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    if (disabled) return;
+    const legal = legalRef.current;
+    if (legal.length === 0) return;
+
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (focusCellRef.current >= 0 && legal.includes(focusCellRef.current)) {
+        onCellClick(focusCellRef.current);
+      }
+      return;
+    }
+
+    let fc = focusCellRef.current;
+    const row = Math.floor(fc / boardSize), col = fc % boardSize;
+    let nr = row, nc = col;
+    if (e.key === 'ArrowUp') nr = Math.max(0, row - 1);
+    else if (e.key === 'ArrowDown') nr = Math.min(boardSize - 1, row + 1);
+    else if (e.key === 'ArrowLeft') nc = Math.max(0, col - 1);
+    else if (e.key === 'ArrowRight') nc = Math.min(boardSize - 1, col + 1);
+    else return;
+    e.preventDefault();
+    focusCellRef.current = nr * boardSize + nc;
+    drawBoard();
+  }, [disabled, boardSize, onCellClick, drawBoard]);
+
+  const focusCellRef = useRef(0);
+
   return (
     <canvas
       ref={canvasRef}
       onClick={handleClick}
-      style={{ cursor: disabled ? 'default' : 'pointer', borderRadius: '8px', display: 'block', margin: '0 auto' }}
+      onTouchEnd={handleTouch}
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+      role="grid"
+      aria-label={`Reversi ${boardSize}x${boardSize} game board. Use arrow keys to navigate, Enter to place.`}
+      style={{ cursor: disabled ? 'default' : 'pointer', borderRadius: '8px', display: 'block', margin: '0 auto', touchAction: 'none' }}
     />
   );
 }
