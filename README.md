@@ -2,9 +2,11 @@
 
 **Reversi with a twist — each player commands a chess knight that moves every turn, flipping opponent discs on landing. Pure TypeScript. Zero dependencies beyond React. Variable board sizes from 4×4 to 16×16.**
 
+### 🎮 [Play it live → beautifulplanet.github.io/Reversi-Knights-](https://beautifulplanet.github.io/Reversi-Knights-/)
+
 ### Impact
 
-- **Playable right now** — `npm run dev` and you're in a game. No install, no account, no loading screen.
+- **Playable right now** — [live on GitHub Pages](https://beautifulplanet.github.io/Reversi-Knights-/) or `npm run dev` locally. No install, no account, no loading screen.
 - **Custom AI engine in pure TypeScript** — minimax with alpha-beta pruning, positional weight tables, 50K node budget. AI responds in <10ms on 8×8.
 - **Novel game mechanic** — persistent chess knights add a second layer of strategy to classic Reversi. Each turn: place a disc, then move your knight in an L-shape to flip adjacent opponent pieces.
 - **2,200 automated test games, zero failures** — 200-game engine test + 2,000-game UI flow simulation. Every commit is verified.
@@ -20,7 +22,8 @@
 | Zero type errors | `tsc --noEmit` |
 | Production build succeeds | `npm run build` |
 | CI pipeline | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
-| 20 issues tracked | [Issues →](https://github.com/beautifulplanet/Reversi-Knights-/issues?q=is:issue) |
+| Deployed | [beautifulplanet.github.io/Reversi-Knights-](https://beautifulplanet.github.io/Reversi-Knights-/) |
+| 21 issues tracked | [Issues →](https://github.com/beautifulplanet/Reversi-Knights-/issues?q=is:issue) |
 
 ### Quality Bar
 
