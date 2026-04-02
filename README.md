@@ -41,6 +41,19 @@ Scaffolded with AI assistance (GitHub Copilot in VS Code). Every change reviewed
 - **Standard:** No change lands without all 3 test gates passing
 - **AI policy:** AI-assisted code is allowed. I verify every change with automated tests. I can explain and extend every component.
 
+### Honest History
+
+This isn't my first attempt. **Go Ultra** was the first iteration — a different game entirely. **Reversi Ultra** was the second — same Reversi concept but built on a Rust + WASM engine that collapsed under its own complexity (5 rewrites, borrow-tracking nightmares, StrictMode double-mount bugs, FinalizationRegistry GC issues). Both are in the repo's parent folder as reference material.
+
+**Reversi Knights was a cold run done in ~3 hours.** Not because I'm fast — because I'd already made every mistake in the previous iterations and documented them. The speed came from lessons learned, not skill:
+
+- V1 taught me that WASM ↔ React bridges are fragile — so V2 is pure TypeScript
+- V1 taught me that batching 4 features in one prompt stalls — so I did one feature per commit
+- V1 taught me that claiming code works before testing is how you close bugs that aren't fixed — so every change runs 4 test gates before pushing
+- V1 taught me that PowerShell `>` creates UTF-16 files — so I use proper encoding
+
+The lesson files ([`LESSONS.md`](../Reversi%20Ultra/LESSONS.md), [`CONSTRUCTION-REVERSI-V2.md`](../Reversi%20Ultra/CONSTRUCTION-REVERSI-V2.md)) are the real source of this project's velocity. The code is the output. The learning is the work.
+
 ---
 
 ## How to Read This README
