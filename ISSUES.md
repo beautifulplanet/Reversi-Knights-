@@ -8,18 +8,11 @@
 
 | # | Title | Type | Priority |
 |---|-------|------|----------|
-| 32 | Active knight capture (chess-style takes) | enhancement | P1-HIGH |
-| 31 | AI chess-hybrid knight algorithm | enhancement | P1-HIGH |
-| 29 | AI knight doesn't understand strategic mission | bug | P1-HIGH |
 | 30 | Save game system with tamper-resistant local storage | enhancement | P2-MED |
 | 28 | newGame() always resets to 8x8 | bug | P2-MED |
 | 20 | Animation interruption can cause visual glitch | bug | P2-MED |
-| 19 | AI knight evaluation is only 1-ply static | enhancement | P2-MED |
 | 18 | snake_case public API vs camelCase internals | enhancement | P3-LOW |
-| 17 | getCellSize reads style.width before first render | bug | P3-LOW |
-| 16 | No recursion guard on AI move chaining in hook | enhancement | P3-LOW |
 | 15 | Magic numbers throughout engine evaluation | enhancement | P3-LOW |
-| 27 | Dead _moveCounts duplicate issue | enhancement | P3-LOW |
 
 ---
 
@@ -27,6 +20,9 @@
 
 | # | Title | Type | Closed By |
 |---|-------|------|-----------|
+| 32 | Active knight capture (chess-style takes) | enhancement | 1026f9c |
+| 31 | AI chess-hybrid knight algorithm | enhancement | 1026f9c |
+| 29 | AI knight strategic mission — 4-pos history, future threats, depth-3, forks | bug | 1026f9c |
 | 27 | Dead code: _moveCounts array never read | enhancement | c186245 |
 | 26 | getFlips (UI) doesn't recognize knights as anchors | bug | c186245 |
 | 25 | evaluate() ignores knight cells — AI blind to positions | bug | c186245 |
