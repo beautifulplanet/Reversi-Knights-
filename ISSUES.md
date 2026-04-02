@@ -14,6 +14,9 @@
 
 | # | Title | Type | Closed By |
 |---|-------|------|-----------|
+| 46 | bestMove knight simulation ignores passive capture | bug | 60e58a9 |
+| 45 | AI safety heuristic on post-flip board underestimates danger | bug | 60e58a9 |
+| 44 | AI knight walks into self-capture — no isKnightCaptured() check | bug | 60e58a9 |
 | 43 | Missing LICENSE file | enhancement | this commit |
 | 42 | README stale issue counts and line numbers | docs | this commit |
 | 41 | flipOrigColor assumes disc values only | bug | this commit |
