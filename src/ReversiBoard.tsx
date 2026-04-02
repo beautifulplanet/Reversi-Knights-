@@ -175,7 +175,9 @@ export default function ReversiBoard({
 
     if (flippedDiscs.length > 0) {
       const newColor = board[flippedDiscs[0]];
-      const origColor = newColor === 1 ? 2 : 1;
+      // Map disc (1/2) or knight (3/4) to the base owner color
+      const newOwner = newColor === 1 || newColor === 3 ? 1 : 2;
+      const origColor = 3 - newOwner; // opposite player
       for (let idx = 0; idx < flippedDiscs.length; idx++) {
         anim.flipProgress.set(flippedDiscs[idx], -idx * 0.15);
         anim.flipOrigColor.set(flippedDiscs[idx], origColor);

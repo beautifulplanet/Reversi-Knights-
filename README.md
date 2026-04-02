@@ -24,7 +24,7 @@
 | CI pipeline | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
 | Knight capture tests | `npx tsx test-knight-captures.ts` |
 | Deployed | [beautifulplanet.github.io/Reversi-Knights-](https://beautifulplanet.github.io/Reversi-Knights-/) |
-| 32 issues tracked (20 closed, 12 open) | [Issues →](https://github.com/beautifulplanet/Reversi-Knights-/issues?q=is:issue) |
+| 43 issues tracked (all closed) | [Issues →](https://github.com/beautifulplanet/Reversi-Knights-/issues?q=is:issue) |
 
 ### Quality Bar
 
@@ -155,12 +155,12 @@ Choose 8×8, 10×10, 12×12, or 16×16 from the lobby. AI adapts its positional 
 
 | File | Lines | Responsibility |
 |---|---|---|
-| `engine.ts` | 834 | Game state, move validation, flip logic, minimax AI, chess-hybrid knight AI, knight captures |
-| `ReversiBoard.tsx` | 250 | Canvas renderer — board, discs, knight pieces (♞ overlay), flip/drop animations, click handling |
-| `useReversiEngine.ts` | 192 | React hook — state management, AI scheduling with chain guard, two-phase turn flow, undo |
-| `App.tsx` | 95 | Lobby (mode, difficulty, board size), game chrome (scores, status, phase indicator, undo button) |
-| `global.css` | 252 | Responsive layout, dark theme, lobby styling, phase labels |
-| `main.tsx` | 4 | React root mount |
+| `engine.ts` | 949 | Game state, move validation, flip logic, minimax AI, chess-hybrid knight AI, knight captures, save/load |
+| `ReversiBoard.tsx` | 303 | Canvas renderer — board, discs, knight pieces (♞ overlay), flip/drop animations, click/touch/keyboard handling |
+| `useReversiEngine.ts` | 232 | React hook — state management, AI scheduling with chain guard, two-phase turn flow, undo, save/load |
+| `App.tsx` | 102 | Lobby (mode, difficulty, board size), game chrome (scores, status, phase indicator, undo/save buttons) |
+| `global.css` | 303 | Responsive layout, dark theme, lobby styling, phase labels, touch support |
+| `main.tsx` | 5 | React root mount |
 
 ### 2 Test Files
 
@@ -285,22 +285,32 @@ GitHub Actions runs on every push and PR to `main`:
 | 25 | Bug | `evaluate()` was blind to knight positions |
 | 26 | Bug | `getFlips` (UI) didn't recognize knights as sandwich anchors |
 
-### Open Issues (12 remaining)
+### Issues (continued)
 
-| # | Priority | Title |
+| # | Type | Title |
 |---|---|---|
-| 15 | P3-LOW | Magic numbers in evaluation |
-| 16 | P3-LOW | AI chain recursion guard |
-| 17 | P2-MED | `getCellSize` mobile viewport |
-| 18 | P3-LOW | snake_case vs camelCase API |
-| 19 | P2-MED | AI knight evaluation depth |
-| 20 | P2-MED | Animation interruption glitch |
-| 27 | P3-LOW | Dead `_moveCounts` duplicate issue |
-| 28 | P2-MED | `newGame()` resets to 8×8 |
-| 29 | P1-HIGH | AI knight strategic mission |
-| 30 | P2-MED | Save game system |
-| 31 | P1-HIGH | AI chess-hybrid knight algorithm |
-| 32 | P1-HIGH | Active knight capture (chess-style takes) |
+| 15 | Enhancement | Magic numbers → named constants |
+| 16 | Enhancement | AI chain recursion guard |
+| 17 | Bug | `getCellSize` mobile viewport fix |
+| 18 | Enhancement | snake_case → camelCase API |
+| 19 | Enhancement | AI knight evaluation depth |
+| 20 | Bug | Animation interruption glitch |
+| 27 | Enhancement | Dead `_moveCounts` removed (dupe of #13) |
+| 28 | Bug | `newGame()` preserves board size |
+| 29 | Enhancement | AI knight strategic mission |
+| 30 | Feature | Save/load game with tamper resistance |
+| 31 | Enhancement | AI chess-hybrid knight algorithm |
+| 32 | Enhancement | Active knight capture (chess-style takes) |
+| 33 | Bug | Corner/X/C bonuses blind to knight values |
+| 34 | Enhancement | Difficulty slider 10→6 distinct levels |
+| 35 | Feature | Touch support for mobile |
+| 36 | Feature | Accessibility (keyboard nav, ARIA, screen reader) |
+| 38 | Bug | Knight landing flips ignore opponent knight |
+| 39 | Bug | Knight landing apply ignores opponent knight |
+| 40 | Bug | `deserialize()` validation hardened |
+| 41 | Bug | `flipOrigColor` handles knight cell values |
+| 42 | Docs | README updated with accurate numbers |
+| 43 | Enhancement | MIT LICENSE file added |
 
 Full issue history: [github.com/beautifulplanet/Reversi-Knights-/issues](https://github.com/beautifulplanet/Reversi-Knights-/issues?q=is:issue)
 
@@ -326,15 +336,15 @@ Full issue history: [github.com/beautifulplanet/Reversi-Knights-/issues](https:/
 | Metric | Value |
 |---|---|
 | Source files | 6 (+ 2 test files) |
-| Total source lines | ~1,628 |
-| Engine lines | 834 |
+| Total source lines | ~1,894 |
+| Engine lines | 949 |
 | Test games (engine) | 200, 0 failures |
 | Test games (UI flow) | 2,000, 0 stuck states |
 | Max AI response (8×8) | 3.5ms |
 | Board sizes | 4×4, 6×6, 8×8, 10×10, 12×12, 14×14, 16×16 |
 | AI depth range | 1–6 |
 | Node budget | 50,000 |
-| GitHub issues | 32 (20 closed, 12 open) |
+| GitHub issues | 43 (all closed) |
 
 ---
 

@@ -391,6 +391,11 @@ function bestMove(
           const kBoard = next.slice();
           kBoard[myKp] = 0; // clear old knight position
           applyKnightLanding(kBoard, kDest, color, sd.size);
+          // Check if knight is immediately captured after landing
+          if (isKnightCaptured(kBoard, kDest, sd.size)) {
+            // Knight suicide — clear knight cell, evaluate without it
+            kBoard[kDest] = 0;
+          }
           const kEval = evaluate(kBoard, color, sd);
           if (kEval > bestKnightEval) {
             bestKnightEval = kEval;
@@ -440,13 +445,14 @@ function getKnightLandingFlips(board: number[], pos: number, color: number, size
   const flips: number[] = [];
   if (board[pos] !== 0 && board[pos] !== 3 && board[pos] !== 4) return flips;
   const opp = 3 - color;
+  const oppKnight = opp + 2; // opponent knight cell value
   const r0 = Math.floor(pos / size), c0 = pos % size;
   for (let d = 0; d < 8; d++) {
     const dirFlips: number[] = [];
     let r = r0 + DR[d], c = c0 + DC[d];
     while (r >= 0 && r < size && c >= 0 && c < size) {
       const idx = r * size + c;
-      if (board[idx] === opp) { dirFlips.push(idx); }
+      if (board[idx] === opp || board[idx] === oppKnight) { dirFlips.push(idx); }
       else if (board[idx] === color || board[idx] === color + 2) {
         for (const f of dirFlips) flips.push(f);
         break;
@@ -462,13 +468,14 @@ function applyKnightLanding(board: number[], pos: number, color: number, size: n
   // Place knight marker, then apply standard Reversi sandwich-flip in all 8 directions
   board[pos] = knightCellValue(color);
   const opp = 3 - color;
+  const oppKnight = opp + 2; // opponent knight cell value
   const r0 = Math.floor(pos / size), c0 = pos % size;
   for (let d = 0; d < 8; d++) {
     let r = r0 + DR[d], c = c0 + DC[d];
     let count = 0;
     while (r >= 0 && r < size && c >= 0 && c < size) {
       const idx = r * size + c;
-      if (board[idx] === opp) { count++; }
+      if (board[idx] === opp || board[idx] === oppKnight) { count++; }
       else if (board[idx] === color || board[idx] === color + 2) {
         // Flip all opponent discs in this direction
         let fr = r0 + DR[d], fc = c0 + DC[d];
@@ -718,15 +725,28 @@ export class Game {
     if (ck !== outer.c) throw new Error('Save data corrupted or tampered');
     const p = JSON.parse(outer.d);
     if (p.v !== 1) throw new Error('Unsupported save version');
-    const g = new Game(p.size);
+    // Validate all fields before applying
+    const size = p.size;
+    if (typeof size !== 'number' || size < 4 || size > 16 || size % 2 !== 0) throw new Error('Invalid board size');
+    const cells = size * size;
+    if (!Array.isArray(p.board) || p.board.length !== cells) throw new Error('Invalid board length');
+    for (let i = 0; i < cells; i++) {
+      const v = p.board[i];
+      if (typeof v !== 'number' || v < 0 || v > 4 || v !== Math.floor(v)) throw new Error('Invalid board cell value');
+    }
+    if (p.turn !== 1 && p.turn !== 2) throw new Error('Invalid turn value');
+    if (typeof p.over !== 'boolean') throw new Error('Invalid game-over flag');
+    if (p.phase !== 'disc' && p.phase !== 'knight') throw new Error('Invalid turn phase');
+    if (!Array.isArray(p.kp) || p.kp.length !== 2) throw new Error('Invalid knight position data');
+    const g = new Game(size);
     g.board = p.board;
     g.turn = p.turn;
     g.over = p.over;
     g._turnPhase = p.phase;
     g.knightPos = p.kp;
-    g._knightHistory = p.kh;
-    g._lastPassed = p.lp;
-    g.history = p.hist;
+    g._knightHistory = Array.isArray(p.kh) ? p.kh : [[], []];
+    g._lastPassed = typeof p.lp === 'number' ? p.lp : 0;
+    g.history = Array.isArray(p.hist) ? p.hist : [];
     return g;
   }
 
@@ -834,8 +854,29 @@ export class Game {
       const flips = getKnightLandingFlips(testBoard, t, p, size);
       score += flips.length * 20;
 
+      // ── Safety pre-check (BEFORE flips) — count orthogonal opponents ──
+      // Pre-flip board gives more conservative danger estimate since landing
+      // flips convert adjacent opponents to friendly, masking real exposure.
+      const preFlopBoard = testBoard.slice();
+      preFlopBoard[t] = knightCellValue(p); // place knight marker only, no flips
+      const tr = Math.floor(t / size), tc = t % size;
+      let oppOrthCount = 0;
+      for (let d = 0; d < 4; d++) {
+        const nr = tr + ORTH_DR[d], nc = tc + ORTH_DC[d];
+        if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+        if (preFlopBoard[nr * size + nc] === opp) oppOrthCount++;
+      }
+      if (oppOrthCount >= 3) score -= 150; // pre-flip danger zone
+
       // Apply knight landing to get resulting position
       applyKnightLanding(testBoard, t, p, size);
+
+      // ── Definitive self-capture check (AFTER flips) ──
+      // isKnightCaptured() is what the real game flow calls in advanceTurn().
+      // If it returns true, the knight WILL be removed. This is knight suicide.
+      if (isKnightCaptured(testBoard, t, size)) {
+        score -= 10000; // unplayable — knight suicide
+      }
 
       // ── 4. Future threat: count opponent discs at L-jump from NEW position ──
       // This is the "knight fork" concept — how dangerous is the knight NEXT turn?
@@ -847,17 +888,6 @@ export class Game {
         futureFlipPotential += futFlips.length;
       }
       score += futureFlipPotential * 5; // future threat value
-
-      // ── 5. Safety: capture risk assessment ──
-      const tr = Math.floor(t / size), tc = t % size;
-      let oppOrthCount = 0;
-      for (let d = 0; d < 4; d++) {
-        const nr = tr + ORTH_DR[d], nc = tc + ORTH_DC[d];
-        if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
-        if (testBoard[nr * size + nc] === opp) oppOrthCount++;
-      }
-      if (oppOrthCount >= 4) score -= 300;  // certain capture
-      else if (oppOrthCount >= 3) score -= 100; // danger zone
 
       // ── 6. Mobility: more future destinations = harder to trap ──
       score += futureTargets.length * 4;

@@ -14,6 +14,13 @@
 
 | # | Title | Type | Closed By |
 |---|-------|------|-----------|
+| 43 | Missing LICENSE file | enhancement | this commit |
+| 42 | README stale issue counts and line numbers | docs | this commit |
+| 41 | flipOrigColor assumes disc values only | bug | this commit |
+| 40 | deserialize() has no board validation | bug | this commit |
+| 39 | applyKnightLanding ignores opponent knight in sandwich | bug | this commit |
+| 38 | getKnightLandingFlips ignores opponent knight in sandwich | bug | this commit |
+| 37 | Duplicate of #38 | bug | closed as dupe |
 | 36 | Accessibility — ARIA labels, keyboard nav, screen reader | enhancement | ddaad5b |
 | 35 | Touch optimization for mobile | enhancement | ddaad5b |
 | 34 | Difficulty slider maps 10→4 levels fix | bug | verified already fixed |
