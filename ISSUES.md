@@ -6,7 +6,9 @@
 
 ## OPEN
 
-*None — all issues resolved.*
+| # | Title | Type | Priority |
+|---|-------|------|----------|
+| 47 | Next-gen knight AI — integrated two-phase minimax | enhancement | P2-MED |
 
 ---
 

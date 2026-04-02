@@ -24,7 +24,7 @@
 | CI pipeline | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
 | Knight capture tests | `npx tsx test-knight-captures.ts` |
 | Deployed | [beautifulplanet.github.io/Reversi-Knights-](https://beautifulplanet.github.io/Reversi-Knights-/) |
-| 43 issues tracked (all closed) | [Issues →](https://github.com/beautifulplanet/Reversi-Knights-/issues?q=is:issue) |
+| 46 issues tracked (all closed) | [Issues →](https://github.com/beautifulplanet/Reversi-Knights-/issues?q=is:issue) |
 
 ### Quality Bar
 
@@ -155,12 +155,12 @@ Choose 8×8, 10×10, 12×12, or 16×16 from the lobby. AI adapts its positional 
 
 | File | Lines | Responsibility |
 |---|---|---|
-| `engine.ts` | 949 | Game state, move validation, flip logic, minimax AI, chess-hybrid knight AI, knight captures, save/load |
-| `ReversiBoard.tsx` | 303 | Canvas renderer — board, discs, knight pieces (♞ overlay), flip/drop animations, click/touch/keyboard handling |
-| `useReversiEngine.ts` | 232 | React hook — state management, AI scheduling with chain guard, two-phase turn flow, undo, save/load |
-| `App.tsx` | 102 | Lobby (mode, difficulty, board size), game chrome (scores, status, phase indicator, undo/save buttons) |
-| `global.css` | 303 | Responsive layout, dark theme, lobby styling, phase labels, touch support |
-| `main.tsx` | 5 | React root mount |
+| `engine.ts` | 844 | Game state, move validation, flip logic, minimax AI, chess-hybrid knight AI, knight captures, save/load |
+| `ReversiBoard.tsx` | 267 | Canvas renderer — board, discs, knight pieces (♞ overlay), flip/drop animations, click/touch/keyboard handling |
+| `useReversiEngine.ts` | 202 | React hook — state management, AI scheduling with chain guard, two-phase turn flow, undo, save/load |
+| `App.tsx` | 93 | Lobby (mode, difficulty, board size), game chrome (scores, status, phase indicator, undo/save buttons) |
+| `global.css` | 258 | Responsive layout, dark theme, lobby styling, phase labels, touch support |
+| `main.tsx` | 4 | React root mount |
 
 ### 2 Test Files
 
@@ -200,8 +200,8 @@ Minimax with alpha-beta pruning:
 ### Knight AI
 
 Two-phase AI per turn:
-1. **Disc phase:** standard minimax selects best disc move
-2. **Knight phase:** chess-hybrid evaluation — scores each L-shape destination using minimax lookahead (depth 2), flip count, positional weight, capture bonus (+300), capture risk penalty, and anti-oscillation tracking
+1. **Disc phase:** standard minimax selects best disc move, then simulates best knight follow-up before evaluating
+2. **Knight phase:** chess-hybrid evaluation — scores each L-shape destination using depth-3 minimax, flip count, future threat analysis (fork potential), capture bonus (+500), self-capture prevention (-10000), safety assessment on pre-flip board, anti-oscillation (4-position history), opponent knight threat detection, and centralization preference
 
 ### Key Design Decisions
 
@@ -311,6 +311,9 @@ GitHub Actions runs on every push and PR to `main`:
 | 41 | Bug | `flipOrigColor` handles knight cell values |
 | 42 | Docs | README updated with accurate numbers |
 | 43 | Enhancement | MIT LICENSE file added |
+| 44 | Bug | AI knight self-capture check (suicide prevention) |
+| 45 | Bug | AI safety check on pre-flip board |
+| 46 | Bug | `bestMove` knight capture check after disc simulation |
 
 Full issue history: [github.com/beautifulplanet/Reversi-Knights-/issues](https://github.com/beautifulplanet/Reversi-Knights-/issues?q=is:issue)
 
@@ -336,15 +339,15 @@ Full issue history: [github.com/beautifulplanet/Reversi-Knights-/issues](https:/
 | Metric | Value |
 |---|---|
 | Source files | 6 (+ 2 test files) |
-| Total source lines | ~1,894 |
-| Engine lines | 949 |
+| Total source lines | ~1,668 |
+| Engine lines | 844 |
 | Test games (engine) | 200, 0 failures |
 | Test games (UI flow) | 2,000, 0 stuck states |
 | Max AI response (8×8) | 3.5ms |
 | Board sizes | 4×4, 6×6, 8×8, 10×10, 12×12, 14×14, 16×16 |
 | AI depth range | 1–6 |
 | Node budget | 50,000 |
-| GitHub issues | 43 (all closed) |
+| GitHub issues | 46 (all closed) |
 
 ---
 
